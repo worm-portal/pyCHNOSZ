@@ -1,3 +1,4 @@
+import os
 import warnings
 
 with warnings.catch_warnings():
@@ -9,6 +10,45 @@ with warnings.catch_warnings():
     
     CHNOSZ = importr("CHNOSZ")
 
+def reset(messages=True):
+    
+    """
+    Python wrapper for the reset() function in CHNOSZ.
+    """
+    
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        a = CHNOSZ.reset()
+        
+    if messages:
+        for warning in w:
+            print(warning.message)
+            
+    
+def add_OBIGT(file, species=None, force=True, messages=True):
+    
+    """
+    Python wrapper for the add.OBIGT() function in CHNOSZ.
+    """
+    
+    args={'file':file}
+    
+    if species != None:
+        if not isinstance(species, list):
+            args["species"] = species
+        else:
+            args["species"] = ro.StrVector(species)
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        a = CHNOSZ.add_OBIGT(**args)
+    
+    if messages:
+        for warning in w:
+            print(warning.message)
+    
+    return list(a)
+        
     
 def info(species, state=None, check_it=True, messages=True):
     
