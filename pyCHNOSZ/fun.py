@@ -1,0 +1,91 @@
+import warnings
+
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    
+    import rpy2.robjects as ro
+    from rpy2.robjects.packages import importr
+    from rpy2.robjects import pandas2ri
+    
+    CHNOSZ = importr("CHNOSZ")
+
+def subcrt(species, coeff=None, state=None,
+           property=["logK","G","H","S","V","Cp"],
+           T=None, P=None, grid=None,
+           convert=True, exceed_Ttr=False, exceed_rhomin=False,
+           logact=None, autobalance=True, IS=None, messages=True):
+    
+    """
+    Python wrapper for the subcrt() function in CHNOSZ, an R package created by Dr. Jeffrey Dick.
+    """
+    
+    if not isinstance(species, list):
+        args = {'species':species}
+        single_species = True
+    else:
+        args = {'species':ro.StrVector(species)}
+        single_species = False
+        
+    if coeff != None: args["coeff"] = ro.FloatVector(coeff)
+        
+    if state != None:
+        if not isinstance(state, list):
+            args["state"] = state
+        else:
+            args["state"] = ro.StrVector(state)
+    
+    if not isinstance(property, list): property = [property]
+    args["property"] = ro.StrVector(property)
+    
+    if T != None:
+        if not isinstance(T, list):
+            args['T'] = T
+        else:
+            args['T'] = ro.FloatVector(T)
+
+    if P != None:
+        if not isinstance(P, list):
+            args['P'] = P
+        else:
+            args['P'] = ro.FloatVector(P)
+    
+    if grid != None: args['grid'] = grid # grid is either 'T' or 'P'
+    
+    args['convert'] = convert
+    args['exceed.Ttr'] = exceed_Ttr
+    args['exceed.rhomin'] = exceed_rhomin
+    
+    if logact != None: args["logact"] = ro.FloatVector(logact)
+    
+    args['autobalance'] = autobalance
+    
+    if IS != None:
+        if not isinstance(IS, list):
+            args["IS"] = IS
+        else:
+            args["IS"] = ro.FloatVector(IS)
+    
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        a = CHNOSZ.subcrt(**args)
+    
+    if messages:
+        for warning in w:
+            print(warning.message)
+    
+    if len(a) == 3:
+        warn = a[2][0] # subcrt's list includes warnings only if they appear
+    else:
+        warn = None
+    
+    if single_species:
+        out_dict = {"species":pandas2ri.ri2py_dataframe(a[0]),
+                    "out":pandas2ri.ri2py_dataframe(a[1][0])} # the extra [0] is important
+    else:
+        out_dict = {"reaction":pandas2ri.ri2py_dataframe(a[0]),
+                    "out":pandas2ri.ri2py_dataframe(a[1])}
+        
+    if warn != None:
+        out_dict["warnings"] = warn
+    
+    return out_dict
