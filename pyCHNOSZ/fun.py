@@ -9,6 +9,49 @@ with warnings.catch_warnings():
     
     CHNOSZ = importr("CHNOSZ")
 
+    
+def info(species, state=None, check_it=True, messages=True):
+    
+    """
+    Python wrapper for the info() function in CHNOSZ.
+    """
+    
+    args = {}
+    output_is_df = False
+    
+    if not isinstance(species, list):
+        args["species"] = species
+        if isinstance(species, int):
+            output_is_df = True
+    else:
+        if isinstance(species[0], int):
+            output_is_df = True
+            args["species"] = ro.IntVector(species)
+        else:
+            args["species"] = ro.StrVector(species)
+    
+    if state != None:
+        if not isinstance(state, list):
+            args["state"] = state
+        else:
+            args["state"] = ro.StrVector(state)
+    
+    args["check.it"] = check_it
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        a = CHNOSZ.info(**args)
+    
+    if messages:
+        for warning in w:
+            print(warning.message)
+    
+    if output_is_df:
+        return pandas2ri.ri2py_dataframe(a)
+    else:
+        return list(a)
+
+    
 def subcrt(species, coeff=None, state=None,
            property=["logK","G","H","S","V","Cp"],
            T=None, P=None, grid=None,
@@ -16,7 +59,7 @@ def subcrt(species, coeff=None, state=None,
            logact=None, autobalance=True, IS=None, messages=True):
     
     """
-    Python wrapper for the subcrt() function in CHNOSZ, an R package created by Dr. Jeffrey Dick.
+    Python wrapper for the subcrt() function in CHNOSZ.
     """
     
     if not isinstance(species, list):

@@ -1,1 +1,1 @@
-from .fun import subcrt
+from .fun import subcrt, info

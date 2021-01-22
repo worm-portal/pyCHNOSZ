@@ -8,6 +8,7 @@ This is a python wrapper for certain functions in the R package [CHNOSZ](https:/
 
 Currently, the following CHNOSZ functions are supported in pyCHNOSZ:
 
+- [info](https://chnosz.net/manual/info.html) - Search for chemical species by name or formula and retrieve their thermodynamic parameters.
 - [subcrt](https://chnosz.net/manual/subcrt.html) - Calculate standard state partial molal thermodynamic properties of reactions at elevated temperatures and pressures.
 
 ## Requirements
@@ -36,14 +37,56 @@ $ pip install pyCHNOSZ
 
 ## Usage
 
-### Get thermodynamic properties of reactions
+### Search for chemical species
 
-See the original documentation for [subcrt](https://chnosz.net/manual/subcrt.html). Useage in pyCHNOSZ is the same, except python lists are used in place of R's vectors. The function produces a dictionary of results stored in pandas dataframes.
+The `info` function can be used to look up chemical species by name or formula. If names or formulas are provided, database index integers are returned. A list of integers will look up chemical species by index and return a table of thermodynamic properties. See the `info` function's [original documentation](https://chnosz.net/manual/info.html) to learn more about what this function can do. A few examples are shown below.
 
-```r
+Look up the database index value of Fe+2:
+
+```python
+info("Fe+2")
+```
+
+Look up multiple chemical species:
+
+```python
+info(["HCO3-", "CH4"])
+```
+
+Define chemical states:
+
+```python
+info(["HCO3-", "CH4"], state=["aq", "gas"])
+```
+
+Search species by index values to look up their thermodynamic parameters.
+
+```python
+info([13, 872])
+```
+
+Nest `info` functions to look up thermodynamic properties directly from names or formulas:
+
+```python
+info(info("Fe+2"))
+```
+
+Look up and add a protein to the database:
+
+```python
+info("LYSC_CHICK")
+```
+
+### Calculate thermodynamic properties of reactions
+
+See the [original documentation](https://chnosz.net/manual/subcrt.html) for `subcrt`. Useage in pyCHNOSZ is the same, except python lists are used in place of R's vectors. The function produces a dictionary of results stored in pandas dataframes. An example is shown below for the reaction H<sub>2 (aq)</sub> + 0.5 O<sub>2 (gas)</sub> = H<sub>2</sub>O<sub>(liq)</sub> at 30 and 50 degrees C and 100 bars pressure:
+
+```python
 subcrt(species=["H2", "O2", "H2O"], coeff=[-1.0, -0.5, 1.0],
        state=["aq", "gas", "liq"], T=[30, 50], P=100)
 ```
+
+Output is a python dictionary of dataframes:
 ```
 subcrt: 3 species at 2 values of T (ºC) and P (bar) (wet) [energy units: cal]
 
