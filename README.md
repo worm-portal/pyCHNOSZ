@@ -2,18 +2,20 @@
 
 Author: Dr. Grayson Boyer, GEOPIG Lab, Arizona State University
 
-This is a python wrapper for certain functions in the R package [CHNOSZ](https://www.chnosz.net/) by Dr. Jeffrey Dick.
+This is a python wrapper for several functions in the R package [CHNOSZ](https://www.chnosz.net/) by [Dr. Jeff Dick](https://chnosz.net/jeff/).
 
 ## Features
 
-Currently, the following CHNOSZ functions are supported in pyCHNOSZ:
+The following CHNOSZ functions are supported in pyCHNOSZ:
 
 - [info](https://chnosz.net/manual/info.html) - Search for chemical species by name or formula and retrieve their thermodynamic parameters.
+- [add_OBIGT](https://chnosz.net/manual/add.OBIGT.html) - add or replace entries in the OBIGT thermodynamic database.
+- [reset](https://chnosz.net/manual/thermo.html) - reset data to default values.
 - [subcrt](https://chnosz.net/manual/subcrt.html) - Calculate standard state partial molal thermodynamic properties of reactions at elevated temperatures and pressures.
 
 ## Requirements
 
-This package must be installed into an environment that has an [R](https://www.r-project.org/) installation. See [these instructions](https://docs.anaconda.com/anaconda/user-guide/tasks/using-r-language/) for installing R with Anaconda. Additionally, the CHNOSZ package for R must be installed (see instructions below).
+This package must be installed into an environment with an [R](https://www.r-project.org/) installation. See [these instructions](https://docs.anaconda.com/anaconda/user-guide/tasks/using-r-language/) for installing R with Anaconda. Additionally, the CHNOSZ package for R must be installed (see instructions below).
 
 ## Installation
 
@@ -36,6 +38,16 @@ $ pip install pyCHNOSZ
 ```
 
 ## Usage
+
+Import pyCHNOSZ in your python code with:
+```python
+import pyCHNOSZ
+```
+
+In the following examples, pyCHNOSZ functions are imported with:
+```python
+from pyCHNOSZ import info, add_OBIGT, reset, subcrt
+```
 
 ### Search for chemical species
 
@@ -75,6 +87,33 @@ Look up and add a protein to the database:
 
 ```python
 info("LYSC_CHICK")
+```
+
+### Add or replace thermodynamic data in the database
+
+See the original documentation for add_OBIGT and reset for basic useage. A few examples are given below.
+
+Load the SUPCRT92 database.
+
+```python
+a = add_OBIGT("SUPCRT92")
+```
+
+The variable `a` is assigned a list of integers corresponding to the indices of chemical species that are added or replaced in the OBIGT thermodynamic database used by pyCHNOSZ.
+
+It is possible to add a custom table of thermodynamic parameters.
+
+```python
+a = add_OBIGT("my_custom_entries.csv")
+info(a) # confirm new entries have been added
+```
+
+The entries of `my_custom_entries.csv` would then be available for thermodynamic calculations with `subcrt`, for example.
+
+Reset thermodynamic database to its original configuration.
+
+```python
+reset()
 ```
 
 ### Calculate thermodynamic properties of reactions
