@@ -62,14 +62,20 @@ def subcrt(species, coeff=None, state=None,
     Python wrapper for the subcrt() function in CHNOSZ.
     """
     
+    single_species = False
+    
     if not isinstance(species, list):
         args = {'species':species}
-        single_species = True
     else:
-        args = {'species':ro.StrVector(species)}
-        single_species = False
+        if isinstance(species[0], int):
+            args = {'species':ro.IntVector(species)}
+        else:
+            args = {'species':ro.StrVector(species)}
         
-    if coeff != None: args["coeff"] = ro.FloatVector(coeff)
+    if coeff != None:
+        args["coeff"] = ro.FloatVector(coeff)
+    else:
+        single_species = True
         
     if state != None:
         if not isinstance(state, list):
@@ -121,12 +127,16 @@ def subcrt(species, coeff=None, state=None,
     else:
         warn = None
     
-    if single_species:
-        out_dict = {"species":pandas2ri.ri2py_dataframe(a[0]),
-                    "out":pandas2ri.ri2py_dataframe(a[1][0])} # the extra [0] is important
-    else:
+    if not single_species:
         out_dict = {"reaction":pandas2ri.ri2py_dataframe(a[0]),
-                    "out":pandas2ri.ri2py_dataframe(a[1])}
+                    "out":pandas2ri.ri2py_dataframe(a[1])} # the extra [0] is important
+    else:
+        out_dict = {"species":pandas2ri.ri2py_dataframe(a[0]), "out":{}}
+        
+        i=0
+        for df in a[1]:
+            out_dict["out"][out_dict["species"].name[i]] = pandas2ri.ri2py_dataframe(df)
+            i += 1
         
     if warn != None:
         out_dict["warnings"] = warn
