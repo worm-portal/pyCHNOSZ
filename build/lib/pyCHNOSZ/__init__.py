@@ -1,1 +1,1 @@
-from .fun import subcrt, info, add_OBIGT, reset
+from .fun import subcrt, info, add_OBIGT, reset, basis, species, affinity, diagram, equilibrate, convert_to_RVector

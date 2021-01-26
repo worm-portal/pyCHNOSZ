@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: pyCHNOSZ
-Version: 0.0.5
+Version: 0.0.7
 Summary: Python wrapper for the R package CHNOSZ by Dr. Jeffrey Dick
 Home-page: UNKNOWN
 Author: Grayson Boyer
@@ -20,6 +20,12 @@ Description: # pyCHNOSZ
         - [add_OBIGT](https://chnosz.net/manual/add.OBIGT.html) - add or replace entries in the OBIGT thermodynamic database.
         - [reset](https://chnosz.net/manual/thermo.html) - reset data to default values.
         - [subcrt](https://chnosz.net/manual/subcrt.html) - Calculate standard state partial molal thermodynamic properties of reactions at elevated temperatures and pressures.
+        - [basis](https://chnosz.net/manual/basis.html) - Define basis species of a chemical system.
+        - [species](https://chnosz.net/manual/species.html) - Define the species of interest in a system.
+        - [equilibrate](https://chnosz.net/manual/equilibrate.html) - Calculate equilibrium chemical activities of species from the affinities of formation of the species at unit activity.
+        - [affinity](https://chnosz.net/manual/affinity.html) - Calculate the chemical affinities of formation reactions of species.
+        - [diagram](https://chnosz.net/manual/diagram.html) - Plot equilibrium chemical activity (1-D speciation) or equal-activity (2-D predominance) diagrams as a function of chemical activities of basis species, temperature and/or pressure.
+        
         
         ## Requirements
         
