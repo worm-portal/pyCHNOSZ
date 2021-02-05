@@ -2,7 +2,7 @@
 
 Author: Dr. Grayson Boyer, GEOPIG Lab, Arizona State University
 
-This is a python wrapper for several functions in the R package [CHNOSZ](https://www.chnosz.net/) by [Dr. Jeff Dick](https://chnosz.net/jeff/).
+[CHNOSZ](https://www.chnosz.net/) is a package written by [Dr. Jeff Dick](https://chnosz.net/jeff/) for performing thermodynamic calculations in aqueous geochemistry and biogeochemistry. pyCHNOSZ is a wrapper for CHNOSZ that allows these calculations to be carried out in Python 3 Jupyter notebooks.
 
 ## Features
 
@@ -147,3 +147,7 @@ subcrt: 3 species at 2 values of T (ºC) and P (bar) (wet) [energy units: cal]
  1 -7.494052 -24.126268  
  2 -8.259704 -20.941879  }
 ```
+
+### More examples:
+
+For more examples, like plotting activity and predominance diagrams, check out the [pyCHNOSZ demo notebook](https://gitlab.com/worm1/pychnosz/-/blob/master/test/pyCHNOSZ-demo.ipynb).

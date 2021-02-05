@@ -17,7 +17,18 @@ with warnings.catch_warnings():
 
 @contextmanager
 def r_inline_plot(width=600, height=600, dpi=100):
+    
+    """
+    Display R plots inline.
 
+    Parameters
+    ----------
+    width, height : int or float, default 600
+        Width and height of the plot.
+    dpi : int or float, default 100
+        Resolution of the plot.
+    """
+    
     with grdevices.render_to_bytesio(grdevices.png, 
                                      width=width,
                                      height=height, 
@@ -29,16 +40,30 @@ def r_inline_plot(width=600, height=600, dpi=100):
     display(Image(data=data, format='png', embed=True))
 
     
-def convert_to_RVector(value, convert_lists=True):
+def convert_to_RVector(value, force_Rvec=True):
     
     """
-    Convert a value into a list (if it is not already) if convert_lists=True
-    and returns an R vector of the appropriate type (bool, int, float, str).
+    Convert a value or list into an R vector of the appropriate type.
+    
+    Parameters
+    ----------
+    value : numeric or str, or list of numeric or str
+        Value to be converted.
+    
+    force_Rvec : bool, default True
+        If `value` is not a list, force conversion into a R vector?
+        False will return an int, float, or str if value is non-list.
+        True will always return an R vector.
+    
+    Returns
+    -------
+    int, float, str, an rpy2 R vector
+        A value or R vector of an appropriate data type.
     """
     
-    if not isinstance(value, list) and not convert_lists:
+    if not isinstance(value, list) and not force_Rvec:
         return value
-    elif not isinstance(value, list) and convert_lists:
+    elif not isinstance(value, list) and force_Rvec:
         value = [value]
     else:
         pass
@@ -58,9 +83,36 @@ def equilibrate(aout, balance=None, loga_balance=None, ispecies=None,
     
     """
     Python wrapper for the equilibrate() function in CHNOSZ.
+    Calculate equilibrium chemical activities of species from the affinities
+    of formation of the species at unit activity.
+    
+    Parameters
+    ----------
+    aout : rpy2.ListVector
+        Output from `affinity`.
+    
+    balance : str or numeric, optional
+        How to balance the transformations.
+    
+    loga_balance : numeric or list of numeric, optional
+        Logarithm of total activity of balanced quantity.
+    
+    ispecies : numeric, optional
+        Which species to include.
+    
+    normalize : bool, default False
+        Normalize the molar formulas of species by the balancing coefficients?
+    
+    messages : bool, default True
+        Display messages from CHNOSZ?
+    
+    Returns
+    -------
+    eout : rpy2.ListVector
+        Output from `equilibrate`.
     """
         
-    # stay.normal is an 'unused argument' in equilibrate()?
+    # stay.normal is an unused argument in equilibrate()?
     
     args = {'aout':aout, 'normalize':normalize}
     
@@ -70,14 +122,14 @@ def equilibrate(aout, balance=None, loga_balance=None, ispecies=None,
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        a = CHNOSZ.equilibrate(**args)
+        eout = CHNOSZ.equilibrate(**args)
 
     if messages:
         for warning in w:
             print(warning.message)
     
-    return a
-    
+    return eout
+
 
 def diagram(eout, ptype='auto', alpha=False, normalize=False,
             as_residue=False, balance=None, groups=None,
@@ -97,6 +149,165 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
     
     """
     Python wrapper for the diagram() function in CHNOSZ.
+    Plot equilibrium chemical activity (1-D speciation) or equal-activity
+    (2-D predominance) diagrams as a function of chemical activities of
+    basis species, temperature and/or pressure.
+    
+    Parameters
+    ----------
+    eout : rpy2.ListVector
+        Output from `equilibrate` or `affinity`.
+    
+    ptype : str, default 'auto'
+        Type of plot, or name of basis species whose activity to plot.
+
+    alpha : bool or str (balance), default False
+        For speciation diagrams, plot degree of formation instead of
+        activities?
+
+    normalize : bool, default False
+        Divide chemical affinities by balance coefficients (rescale to whole
+        formulas)?
+
+    as_residue : bool, default False
+        Divide chemical affinities by balance coefficients (no rescaling)?
+
+    balance : str or numeric, optional
+        How to balance the transformations.
+
+    groups : rpy2.ListVector of numeric, optional
+        Groups of species to consider as a single effective species.
+
+    xrange : numeric, optional
+        Range of x-values between which predominance field boundaries are
+        plotted.
+
+    mar : numeric, optional
+        Margins of plot frame.
+
+    yline : numeric, optional
+        Margin line on which to plot the y-axis name.
+
+    side : numeric, optional
+        Which sides of plot to draw axes.
+
+    xlim : numeric, optional
+        Limits of x-axis.
+
+    ylim : numeric, optional
+        Limits of y-axis.
+
+    xlab : str, optional
+        Label to use for x-axis.
+
+    ylab : str, optional
+        Label to use for y-axis.
+
+    ylog : bool, optional
+        Use a logarithmic y-axis (on 1D degree diagrams)?
+
+    cex : numeric, optional
+        Character expansion (scaling relative to current).
+
+    cex_names : numeric, optional
+        Character expansion factor to be used for names of species on plots.
+
+    cex_axis : numeric, optional
+        Character expansion factor for names of axes.
+
+    lty : numeric, optional
+        Line types to be used in plots.
+
+    lwd : numeric, optional
+        Line width.
+
+    dotted : numeric, optional
+        How often to skip plotting points on predominance field boundaries (to
+        gain the effect of dotted or dashed boundary lines).
+
+    spline_method : str, optional
+        Method used in splinefun.
+
+    contour_method : str, optional
+        Labelling method used in contour (use NULL for no labels).
+
+    levels : numeric, optional
+        Levels at which to draw contour lines.
+
+    col : str, optional
+        Color of activity lines (1D diagram) or predominance field boundaries
+        (2D diagram).
+
+    col_names : str, optional
+        Colors for labels of species.
+
+    fill : str, optional
+        Colors used to fill predominance fields.
+
+    fill_NA : str, optional
+        Color for grid points with NA values.
+
+    limit_water : None or bool, optional
+        Set NaN values beyond water stability limits?
+
+    names : str, optional
+        Names of species for activity lines or predominance fields.
+
+    format_names : bool, default True
+        Apply formatting to chemical formulas?
+
+    bold : bool, default False
+        Use bold formatting for names?
+
+    italic : bool, default False
+        Use italic formatting for names?
+
+    font : str, optional
+        Font type for names (has no effect if format.names is TRUE).
+
+    family : str, optional
+        Font family for names.
+
+    adj : numeric, default 0.5
+        Adjustment for line labels.
+
+    dx : numeric, default 0
+        X offset for line or field labels.
+
+    dy : numeric, default 0
+        Y offset for line or field labels.
+
+    srt : numeric, default 0
+        Rotation for line labels.
+
+    min_area : numeric, default 0
+        Minimum area of fields that should be labeled, expressed as a fraction
+        of the total plot area.
+
+    main : str, optional
+        A main title for the plot; NULL means to plot no title.
+
+    legend.x : str, optional
+        Description of legend placement passed to legend.
+
+    add : bool, default False
+        Add to current plot?
+
+    plot_it : bool, default True
+        Make a plot?
+
+    tplot : bool, default True
+        Set up plot with thermo.plot.new?
+    
+    messages : bool, default True
+        Display messages from CHNOSZ?
+    
+    Returns
+    -------
+    a : rpy2.ListVector
+        Output from `diagram`.
+    args : dict
+        Dictionary of arguments supplied to `diagram`.
     """
     
     args = {'eout':eout, 'ptype':ptype, 'alpha':alpha, 'normalize':normalize,
@@ -166,6 +377,59 @@ def affinity(property=None, sout=None, exceed_Ttr=False,
 
     """
     Python wrapper for the affinity() function in CHNOSZ.
+    Calculate the chemical affinities of formation reactions of species.
+    
+    Parameters
+    ----------
+    property : str, default 'A'
+        The property to be calculated. Default is A, for chemical affinity of
+        formation reactions of species of interest.
+
+    sout : list
+        Output from `subcrt`.
+
+    exceed.Ttr : bool, default False
+        Allow subcrt to compute properties for phases beyond their transition
+        temperature?
+
+    exceed_rhomin : bool, default False
+        Allow subcrt to compute properties of species in the HKF model below
+        0.35 g cm-3?
+
+    return_buffer : bool, default False
+        If TRUE, and a buffer has been associated with one or more basis
+        species in the system, return the values of the activities of the basis
+        species calculated using the buffer. Default is FALSE.
+
+    return_sout : bool, default False
+        Return only the values calculated with subcrt?
+
+    balance : str, default 'PBB'
+        This argument is used to identify a conserved basis species (or PBB) in
+        a chemical activity buffer.
+
+    iprotein : numeric, optional
+        Indices of proteins in thermo$protein for which to calculate
+        properties.
+
+    loga_protein : numeric, default -3
+        Logarithms of activities of proteins identified in iprotein.
+
+    transect : bool, optional
+        Force a transect calculation, even for three or fewer values of the
+        variables?
+    
+    messages : bool, default True
+        Display messages from CHNOSZ?
+        
+    **kwargs : dict
+        Numeric, zero or more named arguments, used to identify the variables
+        of interest in the calculations.
+    
+    Returns
+    -------
+    a : rpy2.ListVector
+        Output from `affinity`.
     """
     
     args = {'exceed_Ttr':exceed_Ttr, 'exceed_rhomin':exceed_rhomin,
@@ -193,19 +457,51 @@ def affinity(property=None, sout=None, exceed_Ttr=False,
     return a
 
             
-def species(species=None, state=None, delete=False, add=False, index_return=False, messages=True):
+def species(species=None, state=None, delete=False, add=False,
+            index_return=False, messages=True):
     
     """
     Python wrapper for the species() function in CHNOSZ.
+    Define the species of interest in a system; modify their physical states
+    and logarithms of activities.
+    
+    Parameters
+    ----------
+    species : str, int, or list of str or int
+        Names or formulas of species to add to the species definition; int,
+        rownumbers of species to modify or delete.
+
+    state : str or list of str, optional
+        physical states; numeric, logarithms of activities or fugacities.
+
+    delete : bool, default False
+        Delete the species identified by numeric values of species (or all
+        species if that argument is missing)?
+
+    add : bool, default False
+        Delete a previous species definition instead of adding to it?
+
+    index_return : bool, default False
+        return the affected rownumbers of species in the OBIGT database instead
+        of the normal output of `species`?
+    
+    messages : bool, default True
+        Display messages from CHNOSZ?
+        
+    Returns
+    ----------
+    pd.DataFrame
+        Pandas dataframe containing a stoichometric matrix of reactions to form
+        species from basis species defined by `basis`.
     """
     
     args={}
     
     if species != None:
-        args["species"] = convert_to_RVector(species, convert_lists=False)
+        args["species"] = convert_to_RVector(species, force_Rvec=False)
             
     if state != None:
-        args["state"] = convert_to_RVector(state, convert_lists=False)
+        args["state"] = convert_to_RVector(state, force_Rvec=False)
         
     args["add"] = add
     args["delete"] = delete
@@ -226,15 +522,39 @@ def basis(species=None, state=None, logact=None, delete=False, messages=True):
     
     """
     Python wrapper for the basis() function in CHNOSZ.
+    Define the basis species of a chemical system.
+    
+    Parameters
+    ----------
+    species : str, int, or list of str or int
+        Names or formulas of species, or numeric, indices of species.
+
+    state : str or list of str, optional
+        Physical states or names of buffers.
+
+    logact : numeric or list of numeric, optional
+        Logarithms of activities or fugacities.
+
+    delete : bool, default False
+        Delete the current basis species definition?
+
+    messages : bool, default True
+        Display messages from CHNOSZ?
+        
+    Returns
+    ----------
+    pd.DataFrame
+        Pandas dataframe containing a stoichometric matrix of basis species'
+        elemental composition.
     """
     
     args={}
     
     if species != None:
-        args["species"] = convert_to_RVector(species, convert_lists=False)
+        args["species"] = convert_to_RVector(species, force_Rvec=False)
             
     if state != None:
-        args["state"] = convert_to_RVector(state, convert_lists=False)
+        args["state"] = convert_to_RVector(state, force_Rvec=False)
     
     if logact != None: args["logact"] = convert_to_RVector(logact)
     
@@ -255,6 +575,15 @@ def reset(messages=True):
     
     """
     Python wrapper for the reset() function in CHNOSZ.
+    Reset all of the data used in CHNOSZ to default values. This includes the
+    computational settings, thermodynamic database, and system settings
+    (chemical species).
+    
+    Parameters
+    ----------
+    messages : bool, default True
+        Print messages from CHNOSZ?
+    
     """
     
     with warnings.catch_warnings(record=True) as w:
@@ -270,6 +599,26 @@ def add_OBIGT(file, species=None, force=True, messages=True):
     
     """
     Python wrapper for the add.OBIGT() function in CHNOSZ.
+    Add or modify species in the thermodynamic database.
+    
+    Parameters
+    ----------
+    file : str
+        Path to a file.
+
+    species : str, optional
+        Names of species to load from file.
+
+    force : bool, default True
+        Force replacement of already existing species?
+    
+    messages : bool, default True
+        Print messages from CHNOSZ?
+    
+    Returns
+    ----------
+    list of int
+        A list of OBIGT database indices (ispecies) that have been added.
     """
     
     args={'file':file}
@@ -295,18 +644,42 @@ def info(species, state=None, check_it=True, messages=True):
     
     """
     Python wrapper for the info() function in CHNOSZ.
+    Search for species by name or formula, retrieve their thermodynamic
+    properties and parameters, and add proteins to the thermodynamic database.
+    
+    Parameters
+    ----------
+    species : str, int, or list of str or int
+        Name or formula of species, or numeric, rownumber of species in the
+        OBIGT database.
+
+    state : str or list of str, optional
+        State(s) of species.
+
+    check_it : bool, default True
+        Check GHS and EOS parameters for self-consistency?
+    
+    messages : bool, default True
+        Print messages from CHNOSZ?
+    
+    Returns
+    ----------
+    pd.DataFrame or list of int
+        Returns a Pandas dataframe if supplied a list of OBIGT database indices
+        (ispecies), or a list of ispecies if given a list of species names or
+        formulas.
     """
     
     args = {}
     output_is_df = False
     
-    args["species"] = convert_to_RVector(species, convert_lists=False)
+    args["species"] = convert_to_RVector(species, force_Rvec=False)
     if not isinstance(species, list): species = [species]
     if all(isinstance(x, int) for x in species):
         output_is_df = True
     
     if state != None:
-        args["state"] = convert_to_RVector(state, convert_lists=False)
+        args["state"] = convert_to_RVector(state, force_Rvec=False)
     
     args["check.it"] = check_it
 
@@ -325,18 +698,78 @@ def info(species, state=None, check_it=True, messages=True):
 
     
 def subcrt(species, coeff=None, state=None,
-           property=["logK","G","H","S","V","Cp"],
+           property=["logK", "G", "H", "S", "V", "Cp"],
            T=None, P=None, grid=None,
            convert=True, exceed_Ttr=False, exceed_rhomin=False,
-           logact=None, autobalance=True, IS=None, messages=True):
+           logact=None, autobalance=True, IS=None, messages=True,
+           show=True):
     
     """
     Python wrapper for the subcrt() function in CHNOSZ.
+    Calculate the standard molal thermodynamic properties of one or more
+    species or a reaction between species as a function of temperature and
+    pressure.
+    
+    Parameters
+    ----------
+    species : str, int, or list of str or int
+        Name or formula of species, or numeric, rownumber of species in the
+        OBIGT database.
+
+    coeff : numeric or list of numeric, optional
+        Reaction coefficients on species.
+
+    state : str or list of str, optional
+        State(s) of species.
+
+    property : str or list of str, optional
+        Property(s) to calculate.
+
+    T : numeric or list of numeric, optional
+        Temperature(s) of the calculation.
+
+    P : numeric, list of numeric, or str if 'Psat', default 'Psat'
+        Pressure(s) of the calculation.
+
+    grid : str, default None
+        Type of PxT grid to produce (None, the default, means no gridding).
+
+    exceed_Ttr : bool, default False
+        Calculate Gibbs energies of mineral phases and other species beyond
+        their transition temperatures?
+
+    exceed_rhomin : bool, default False
+        Return properties of species in the HKF model below 0.35 g cm-3?
+
+    logact : numeric or list of numeric, optional
+        Logarithms of activities of species in reaction.
+
+    convert : bool, default True
+        Are input and output units of T and P those of the user (True) (see
+        T_units), or are they Kelvin and bar (False)?
+
+    autobalance : bool, default True
+        Attempt to automatically balance reaction with basis species?
+
+    IS : numeric or list of numeric, optional
+        Ionic strength(s) at which to calculate adjusted molal properties,
+        mol kg^-1.
+    
+    messages : bool, default True
+        Print messages from CHNOSZ?
+        
+    show : bool, default True
+        Display CHNOSZ tables?
+    
+    Returns
+    ----------
+    out : object of class SubcrtOutput
+        An object that stores the output of `subcrt`.
     """
     
     single_species = False
     
-    args = {'species':convert_to_RVector(species, convert_lists=False)}
+    args = {'species':convert_to_RVector(species, force_Rvec=False)}
         
     if coeff != None:
         args["coeff"] = convert_to_RVector(coeff)
@@ -344,15 +777,15 @@ def subcrt(species, coeff=None, state=None,
         single_species = True
         
     if state != None:
-        args["state"] = convert_to_RVector(state, convert_lists=False)
+        args["state"] = convert_to_RVector(state, force_Rvec=False)
     
     args["property"] = convert_to_RVector(property)
     
     if T != None:
-        args['T'] = convert_to_RVector(T, convert_lists=False)
+        args['T'] = convert_to_RVector(T, force_Rvec=False)
 
     if P != None:
-        args['P'] = convert_to_RVector(P, convert_lists=False)
+        args['P'] = convert_to_RVector(P, force_Rvec=False)
     
     if grid != None: args['grid'] = grid # grid is either 'T' or 'P'
     
@@ -365,7 +798,7 @@ def subcrt(species, coeff=None, state=None,
     args['autobalance'] = autobalance
     
     if IS != None:
-        args["IS"] = convert_to_RVector(IS, convert_lists=False)
+        args["IS"] = convert_to_RVector(IS, force_Rvec=False)
     
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
@@ -394,4 +827,44 @@ def subcrt(species, coeff=None, state=None,
     if warn != None:
         out_dict["warnings"] = warn
     
-    return out_dict
+    out = SubcrtOutput(out_dict)
+    
+    if show:
+        for table in out.__dict__.keys():
+            if not isinstance(out[table], dict):
+                display(out[table])
+            else:
+                for subtable in out[table].keys():
+                    print("\n"+subtable+":") # species name
+                    display(out[table][subtable])
+    
+    return out
+
+
+class SubcrtOutput(object):
+    """
+    Stores the output of a `subcrt` calculation.
+    
+    Attributes
+    ----------
+    reaction : pd.DataFrame
+        Pandas dataframe summary of the reaction. Only present if a reaction is
+        specified.
+        
+    species : pd.Dataframe
+        Pandas dataframe summary of species. Only present if a reaction is not
+        specified.
+        
+    out : pd.Dataframe
+        Pandas dataframe of `subcrt` output.
+        
+    warnings : pd.Dataframe
+        Pandas dataframe of calculation warnings. Only present if warnings were
+        generated.
+    """
+    def __init__(self, args): 
+        for k in args:
+            setattr(self, k, args[k])
+
+    def __getitem__(self, item):
+         return getattr(self, item)

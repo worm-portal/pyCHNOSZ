@@ -1,7 +1,7 @@
 Metadata-Version: 2.1
 Name: pyCHNOSZ
-Version: 0.0.7
-Summary: Python wrapper for the R package CHNOSZ by Dr. Jeffrey Dick
+Version: 0.0.9
+Summary: Python wrapper for the R package CHNOSZ.
 Home-page: UNKNOWN
 Author: Grayson Boyer
 Author-email: gmboyer@asu.edu
@@ -10,7 +10,7 @@ Description: # pyCHNOSZ
         
         Author: Dr. Grayson Boyer, GEOPIG Lab, Arizona State University
         
-        This is a python wrapper for several functions in the R package [CHNOSZ](https://www.chnosz.net/) by [Dr. Jeff Dick](https://chnosz.net/jeff/).
+        [CHNOSZ](https://www.chnosz.net/) is a package written by [Dr. Jeff Dick](https://chnosz.net/jeff/) for performing thermodynamic calculations in aqueous geochemistry and biogeochemistry. pyCHNOSZ is a wrapper for CHNOSZ that allows these calculations to be carried out in Python 3 Jupyter notebooks.
         
         ## Features
         
@@ -155,6 +155,10 @@ Description: # pyCHNOSZ
          1 -7.494052 -24.126268  
          2 -8.259704 -20.941879  }
         ```
+        
+        ### More examples:
+        
+        For more examples, like plotting activity and predominance diagrams, check out the [pyCHNOSZ demo notebook](https://gitlab.com/worm1/pychnosz/-/blob/master/test/pyCHNOSZ-demo.ipynb).
 Platform: UNKNOWN
 Classifier: Programming Language :: Python :: 3
 Classifier: License :: OSI Approved :: MIT License

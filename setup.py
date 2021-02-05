@@ -5,10 +5,10 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="pyCHNOSZ",
-    version="0.0.7",
+    version="0.0.9",
     author="Grayson Boyer",
     author_email="gmboyer@asu.edu",
-    description="Python wrapper for the R package CHNOSZ by Dr. Jeffrey Dick",
+    description="Python wrapper for the R package CHNOSZ.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     entry_points={},
@@ -19,7 +19,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
-    install_requires=['rpy2', 'pandas'],
+    install_requires=['rpy2', 'pandas', 'ipython'],
     include_package_data=True,
     zip_safe=False
 )
