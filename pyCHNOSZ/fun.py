@@ -16,7 +16,7 @@ with warnings.catch_warnings():
 
 
 @contextmanager
-def r_inline_plot(width=600, height=600, dpi=100):
+def __r_inline_plot(width=600, height=600, dpi=100):
     
     """
     Display R plots inline.
@@ -40,7 +40,7 @@ def r_inline_plot(width=600, height=600, dpi=100):
     display(Image(data=data, format='png', embed=True))
 
     
-def convert_to_RVector(value, force_Rvec=True):
+def _convert_to_RVector(value, force_Rvec=True):
     
     """
     Convert a value or list into an R vector of the appropriate type.
@@ -118,7 +118,7 @@ def equilibrate(aout, balance=None, loga_balance=None, ispecies=None,
     
     if balance != None: args['balance'] = balance
     if loga_balance != None: args['loga.balance'] = loga_balance
-    if ispecies != None: args['ispecies'] = convert_to_RVector(ispecies)
+    if ispecies != None: args['ispecies'] = _convert_to_RVector(ispecies)
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
@@ -287,7 +287,7 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
     main : str, optional
         A main title for the plot; NULL means to plot no title.
 
-    legend.x : str, optional
+    legend_x : str, optional
         Description of legend placement passed to legend.
 
     add : bool, default False
@@ -317,36 +317,36 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
     
     if balance != None: args["balance"] = balance
     if groups != None: args["groups"] = groups
-    if xrange != None: args["xrange"] = convert_to_RVector(xrange)
-    if mar != None: args["mar"] = convert_to_RVector(mar)
-    if yline != None: args["yline"] = convert_to_RVector(yline)
-    if side != None: args["side"] = convert_to_RVector(side)
-    if xlim != None: args["xlim"] = convert_to_RVector(xlim)
-    if ylim != None: args["ylim"] = convert_to_RVector(ylim)
+    if xrange != None: args["xrange"] = _convert_to_RVector(xrange)
+    if mar != None: args["mar"] = _convert_to_RVector(mar)
+    if yline != None: args["yline"] = _convert_to_RVector(yline)
+    if side != None: args["side"] = _convert_to_RVector(side)
+    if xlim != None: args["xlim"] = _convert_to_RVector(xlim)
+    if ylim != None: args["ylim"] = _convert_to_RVector(ylim)
     if xlab != None: args["xlab"] = xlab
     if ylab != None: args["ylab"] = ylab
-    if cex != None: args["cex"] = convert_to_RVector(cex)
-    if cex_names != None: args["cex.names"] = convert_to_RVector(cex_names)
-    if cex_axis != None: args["cex.axis"] = convert_to_RVector(cex_axis)
-    if lty != None: args["lty"] = convert_to_RVector(lty)
-    if lwd != None: args["lwd"] = convert_to_RVector(lwd)
+    if cex != None: args["cex"] = _convert_to_RVector(cex)
+    if cex_names != None: args["cex.names"] = _convert_to_RVector(cex_names)
+    if cex_axis != None: args["cex.axis"] = _convert_to_RVector(cex_axis)
+    if lty != None: args["lty"] = _convert_to_RVector(lty)
+    if lwd != None: args["lwd"] = _convert_to_RVector(lwd)
     if dotted != None: args["dotted"] = convert_to_RVector(dotted)
     if spline_method != None: args["spline.method"] = spline_method
     if contour_method != None: args["contour.method"] = contour_method
-    if levels != None: args["levels"] = convert_to_RVector(levels)
-    if col != None: args["col"] = convert_to_RVector(col)
-    if col_names != None: args["col.names"] = convert_to_RVector(col_names)
-    if fill != None: args["fill"] = convert_to_RVector(fill)
+    if levels != None: args["levels"] = _convert_to_RVector(levels)
+    if col != None: args["col"] = _convert_to_RVector(col)
+    if col_names != None: args["col.names"] = _convert_to_RVector(col_names)
+    if fill != None: args["fill"] = _convert_to_RVector(fill)
     if limit_water != None: args["limit.water"] = limit_water
-    if names != None: args["names"] = convert_to_RVector(names)
-    if font != None: args["font"] = convert_to_RVector(font)
-    if family != None: args["family"] = convert_to_RVector(family)
+    if names != None: args["names"] = _convert_to_RVector(names)
+    if font != None: args["font"] = _convert_to_RVector(font)
+    if family != None: args["family"] = _convert_to_RVector(family)
     if main != None: args["main"] = main
     if legend_x != None: args["legend.x"] = legend_x
     
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        with r_inline_plot(width=1024, height=896, dpi=150):
+        with __r_inline_plot(width=1024, height=896, dpi=150):
             if isinstance(add, bool):
                 if add: # add='True' does not work with the current pyCHNOSZ framework
                     raise Exception("The argument 'add' must be assigned the output of the previous diagram(s).")
@@ -388,7 +388,7 @@ def affinity(property=None, sout=None, exceed_Ttr=False,
     sout : list
         Output from `subcrt`.
 
-    exceed.Ttr : bool, default False
+    exceed_Ttr : bool, default False
         Allow subcrt to compute properties for phases beyond their transition
         temperature?
 
@@ -498,10 +498,10 @@ def species(species=None, state=None, delete=False, add=False,
     args={}
     
     if species != None:
-        args["species"] = convert_to_RVector(species, force_Rvec=False)
+        args["species"] = _convert_to_RVector(species, force_Rvec=False)
             
     if state != None:
-        args["state"] = convert_to_RVector(state, force_Rvec=False)
+        args["state"] = _convert_to_RVector(state, force_Rvec=False)
         
     args["add"] = add
     args["delete"] = delete
@@ -551,12 +551,12 @@ def basis(species=None, state=None, logact=None, delete=False, messages=True):
     args={}
     
     if species != None:
-        args["species"] = convert_to_RVector(species, force_Rvec=False)
+        args["species"] = _convert_to_RVector(species, force_Rvec=False)
             
     if state != None:
-        args["state"] = convert_to_RVector(state, force_Rvec=False)
+        args["state"] = _convert_to_RVector(state, force_Rvec=False)
     
-    if logact != None: args["logact"] = convert_to_RVector(logact)
+    if logact != None: args["logact"] = _convert_to_RVector(logact)
     
     args["delete"] = delete
     
@@ -627,7 +627,7 @@ def add_OBIGT(file, species=None, force=True, messages=True):
         if not isinstance(species, list):
             args["species"] = species
         else:
-            args["species"] = convert_to_RVector(species)
+            args["species"] = _convert_to_RVector(species)
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
@@ -673,13 +673,13 @@ def info(species, state=None, check_it=True, messages=True):
     args = {}
     output_is_df = False
     
-    args["species"] = convert_to_RVector(species, force_Rvec=False)
+    args["species"] = _convert_to_RVector(species, force_Rvec=False)
     if not isinstance(species, list): species = [species]
     if all(isinstance(x, int) for x in species):
         output_is_df = True
     
     if state != None:
-        args["state"] = convert_to_RVector(state, force_Rvec=False)
+        args["state"] = _convert_to_RVector(state, force_Rvec=False)
     
     args["check.it"] = check_it
 
@@ -769,23 +769,23 @@ def subcrt(species, coeff=None, state=None,
     
     single_species = False
     
-    args = {'species':convert_to_RVector(species, force_Rvec=False)}
+    args = {'species': _convert_to_RVector(species, force_Rvec=False)}
         
     if coeff != None:
-        args["coeff"] = convert_to_RVector(coeff)
+        args["coeff"] = _convert_to_RVector(coeff)
     else:
         single_species = True
         
     if state != None:
-        args["state"] = convert_to_RVector(state, force_Rvec=False)
+        args["state"] = _convert_to_RVector(state, force_Rvec=False)
     
-    args["property"] = convert_to_RVector(property)
+    args["property"] = _convert_to_RVector(property)
     
     if T != None:
-        args['T'] = convert_to_RVector(T, force_Rvec=False)
+        args['T'] = _convert_to_RVector(T, force_Rvec=False)
 
     if P != None:
-        args['P'] = convert_to_RVector(P, force_Rvec=False)
+        args['P'] = _convert_to_RVector(P, force_Rvec=False)
     
     if grid != None: args['grid'] = grid # grid is either 'T' or 'P'
     
@@ -793,12 +793,12 @@ def subcrt(species, coeff=None, state=None,
     args['exceed.Ttr'] = exceed_Ttr
     args['exceed.rhomin'] = exceed_rhomin
     
-    if logact != None: args["logact"] = convert_to_RVector(logact)
+    if logact != None: args["logact"] = _convert_to_RVector(logact)
     
     args['autobalance'] = autobalance
     
     if IS != None:
-        args["IS"] = convert_to_RVector(IS, force_Rvec=False)
+        args["IS"] = _convert_to_RVector(IS, force_Rvec=False)
     
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")

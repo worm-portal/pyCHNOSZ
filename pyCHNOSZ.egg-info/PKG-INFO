@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: pyCHNOSZ
-Version: 0.0.9
+Version: 0.1.0
 Summary: Python wrapper for the R package CHNOSZ.
 Home-page: UNKNOWN
 Author: Grayson Boyer
