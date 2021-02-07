@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: pyCHNOSZ
-Version: 0.1.1
+Version: 0.1.2
 Summary: Python wrapper for the R package CHNOSZ.
 Home-page: UNKNOWN
 Author: Grayson Boyer
@@ -61,7 +61,7 @@ Description: # pyCHNOSZ
         
         In the following examples, pyCHNOSZ functions are imported with:
         ```python
-        from pyCHNOSZ import info, add_OBIGT, reset, subcrt
+        from pyCHNOSZ import info, add_OBIGT, mod_OBIGT, reset, subcrt
         ```
         
         ### Search for chemical species

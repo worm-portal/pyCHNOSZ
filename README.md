@@ -53,7 +53,7 @@ import pyCHNOSZ
 
 In the following examples, pyCHNOSZ functions are imported with:
 ```python
-from pyCHNOSZ import info, add_OBIGT, reset, subcrt
+from pyCHNOSZ import info, add_OBIGT, mod_OBIGT, reset, subcrt
 ```
 
 ### Search for chemical species
