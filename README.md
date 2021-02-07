@@ -9,7 +9,8 @@ Author: Dr. Grayson Boyer, GEOPIG Lab, Arizona State University
 The following CHNOSZ functions are supported in pyCHNOSZ:
 
 - [info](https://chnosz.net/manual/info.html) - Search for chemical species by name or formula and retrieve their thermodynamic parameters.
-- [add_OBIGT](https://chnosz.net/manual/add.OBIGT.html) - add or replace entries in the OBIGT thermodynamic database.
+- [add_OBIGT](https://chnosz.net/manual/add.OBIGT.html) - Add or overwrite species in the OBIGT thermodynamic database by supplying a comma separated value (csv) file with custom data.
+- [mod_OBIGT](https://chnosz.net/manual/add.OBIGT.html) - Modify species in the OBIGT thermodynamic database. Optionally, supply a Pandas dataframe containing custom data.
 - [reset](https://chnosz.net/manual/thermo.html) - reset data to default values.
 - [subcrt](https://chnosz.net/manual/subcrt.html) - Calculate standard state partial molal thermodynamic properties of reactions at elevated temperatures and pressures.
 - [basis](https://chnosz.net/manual/basis.html) - Define basis species of a chemical system.
@@ -57,7 +58,7 @@ from pyCHNOSZ import info, add_OBIGT, reset, subcrt
 
 ### Search for chemical species
 
-The `info` function can be used to look up chemical species by name or formula. If names or formulas are provided, database index integers are returned. A list of integers will look up chemical species by index and return a table of thermodynamic properties. See the `info` function's [original documentation](https://chnosz.net/manual/info.html) to learn more about what this function can do. A few examples are shown below.
+The `info()` function can be used to look up chemical species by name or formula. If names or formulas are provided, database index integers are returned. A list of integers will look up chemical species by index and return a table of thermodynamic properties. See the `info()` function's [original documentation](https://chnosz.net/manual/info.html) to learn more about what this function can do. A few examples are shown below.
 
 Look up the database index value of Fe+2:
 
@@ -97,7 +98,7 @@ info("LYSC_CHICK")
 
 ### Add or replace thermodynamic data in the database
 
-See the original documentation for add_OBIGT and reset for basic useage. A few examples are given below.
+See the original R documentation for `add_OBIGT()` and `reset()` for basic useage. A few examples are given below.
 
 Load the SUPCRT92 database.
 
@@ -114,7 +115,7 @@ a = add_OBIGT("my_custom_entries.csv")
 info(a) # confirm new entries have been added
 ```
 
-The entries of `my_custom_entries.csv` would then be available for thermodynamic calculations with `subcrt`, for example.
+The entries of `my_custom_entries.csv` would then be available for thermodynamic calculations with `subcrt()`, for example.
 
 Reset thermodynamic database to its original configuration.
 
@@ -122,9 +123,16 @@ Reset thermodynamic database to its original configuration.
 reset()
 ```
 
+Modify values in the thermodynamic database with `mod_OBIGT()`:
+
+```python
+mod_OBIGT("HCO3-", G = -140283.7, Cp = -9)
+info(info("HCO3-"))
+```
+
 ### Calculate thermodynamic properties of reactions
 
-See the [original documentation](https://chnosz.net/manual/subcrt.html) for `subcrt`. Useage in pyCHNOSZ is the same, except python lists are used in place of R's vectors. The function produces a dictionary of results stored in pandas dataframes. An example is shown below for the reaction H<sub>2 (aq)</sub> + 0.5 O<sub>2 (gas)</sub> = H<sub>2</sub>O<sub>(liq)</sub> at 30 and 50 degrees C and 100 bars pressure:
+See the [original documentation](https://chnosz.net/manual/subcrt.html) for `subcrt()`. Useage in pyCHNOSZ is the same, except python lists are used in place of R's vectors. The function produces a dictionary of results stored in pandas dataframes. An example is shown below for the reaction H<sub>2 (aq)</sub> + 0.5 O<sub>2 (gas)</sub> = H<sub>2</sub>O<sub>(liq)</sub> at 30 and 50 degrees C and 100 bars pressure:
 
 ```python
 subcrt(species=["H2", "O2", "H2O"], coeff=[-1.0, -0.5, 1.0],

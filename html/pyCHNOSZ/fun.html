@@ -30,6 +30,7 @@
 import warnings
 from contextlib import contextmanager
 from IPython.display import Image, display
+import pandas as pd
 
 with warnings.catch_warnings():
     warnings.simplefilter(&#34;ignore&#34;)
@@ -38,6 +39,8 @@ with warnings.catch_warnings():
     from rpy2.robjects.packages import importr
     from rpy2.robjects import pandas2ri
     from rpy2.robjects.lib import grdevices
+    
+    pandas2ri.activate()
     
     CHNOSZ = importr(&#34;CHNOSZ&#34;)
     grdev = importr(&#39;grDevices&#39;)
@@ -537,13 +540,13 @@ def species(species=None, state=None, delete=False, add=False,
     
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter(&#34;always&#34;)
-        a = CHNOSZ.species(**args)
+        sout = CHNOSZ.species(**args)
         
     if messages:
         for warning in w:
             print(warning.message)
     
-    return pandas2ri.ri2py_dataframe(a)
+    return pandas2ri.ri2py_dataframe(sout)
 
 
 def basis(species=None, state=None, logact=None, delete=False, messages=True):
@@ -590,13 +593,13 @@ def basis(species=None, state=None, logact=None, delete=False, messages=True):
     
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter(&#34;always&#34;)
-        a = CHNOSZ.basis(**args)
+        bout = CHNOSZ.basis(**args)
         
     if messages:
         for warning in w:
             print(warning.message)
     
-    return pandas2ri.ri2py_dataframe(a)
+    return pandas2ri.ri2py_dataframe(bout)
 
 
 def reset(messages=True):
@@ -616,7 +619,7 @@ def reset(messages=True):
     
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter(&#34;always&#34;)
-        a = CHNOSZ.reset()
+        CHNOSZ.reset()
         
     if messages:
         for warning in w:
@@ -627,7 +630,8 @@ def add_OBIGT(file, species=None, force=True, messages=True):
     
     &#34;&#34;&#34;
     Python wrapper for the add.OBIGT() function in CHNOSZ.
-    Add or modify species in the thermodynamic database.
+    Add or overwrite species in the OBIGT thermodynamic database by supplying
+    a comma separated value (csv) file with custom data.
     
     Parameters
     ----------
@@ -645,8 +649,9 @@ def add_OBIGT(file, species=None, force=True, messages=True):
     
     Returns
     ----------
-    list of int
-        A list of OBIGT database indices (ispecies) that have been added.
+    a : list of int
+        A list of OBIGT database indices (ispecies) that have been added or
+        modified.
     &#34;&#34;&#34;
     
     args={&#39;file&#39;:file}
@@ -659,14 +664,59 @@ def add_OBIGT(file, species=None, force=True, messages=True):
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter(&#34;always&#34;)
-        a = CHNOSZ.add_OBIGT(**args)
+        ispecies = CHNOSZ.add_OBIGT(**args)
     
     if messages:
         for warning in w:
             print(warning.message)
     
-    return list(a)
+    return list(ispecies)
+
+
+def mod_OBIGT(*args, messages=True, **kwargs):
+    
+    &#34;&#34;&#34;
+    Python wrapper for the mod.OBIGT() function in CHNOSZ.
+    Modify species in the OBIGT thermodynamic database. Optionally, supply a
+    Pandas dataframe containing custom data.
+    
+    Parameters
+    ----------
+    *args : str, numeric, or Pandas dataframe
+        Species names or thermodynamic database index numbers to modify. If a
+        Pandas dataframe, database entries to add or modify.
+    
+    *kwargs : str or numeric
+        Properties of species to modify in the thermodynamic database.
+    
+    messages : bool, default True
+        Print messages from CHNOSZ?
+    
+    Returns
+    ----------
+    list of int
+        A list of OBIGT database indices (ispecies) that have been added or
+        modified.
+    &#34;&#34;&#34;
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter(&#34;always&#34;)
         
+        if isinstance(args[0], pd.DataFrame):
+            arg_list = list(args)
+            arg_list[0] = pandas2ri.py2ri(arg_list[0])
+            args = tuple(arg_list)
+        else:
+            pass
+        
+        ispecies = CHNOSZ.mod_OBIGT(*args, **kwargs)
+    
+    if messages:
+        for warning in w:
+            print(warning.message)
+    
+    return list(ispecies)
+    
     
 def info(species, state=None, check_it=True, messages=True):
     
@@ -889,6 +939,7 @@ class SubcrtOutput(object):
     warnings : pd.Dataframe
         Pandas dataframe of calculation warnings. Only present if warnings were
         generated.
+        
     &#34;&#34;&#34;
     def __init__(self, args): 
         for k in args:
@@ -910,7 +961,8 @@ class SubcrtOutput(object):
 </code></dt>
 <dd>
 <div class="desc"><p>Python wrapper for the add.OBIGT() function in CHNOSZ.
-Add or modify species in the thermodynamic database.</p>
+Add or overwrite species in the OBIGT thermodynamic database by supplying
+a comma separated value (csv) file with custom data.</p>
 <h2 id="parameters">Parameters</h2>
 <dl>
 <dt><strong><code>file</code></strong> :&ensp;<code>str</code></dt>
@@ -924,8 +976,9 @@ Add or modify species in the thermodynamic database.</p>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>list</code> of <code>int</code></dt>
-<dd>A list of OBIGT database indices (ispecies) that have been added.</dd>
+<dt><strong><code>a</code></strong> :&ensp;<code>list</code> of <code>int</code></dt>
+<dd>A list of OBIGT database indices (ispecies) that have been added or
+modified.</dd>
 </dl></div>
 <details class="source">
 <summary>
@@ -935,7 +988,8 @@ Add or modify species in the thermodynamic database.</p>
     
     &#34;&#34;&#34;
     Python wrapper for the add.OBIGT() function in CHNOSZ.
-    Add or modify species in the thermodynamic database.
+    Add or overwrite species in the OBIGT thermodynamic database by supplying
+    a comma separated value (csv) file with custom data.
     
     Parameters
     ----------
@@ -953,8 +1007,9 @@ Add or modify species in the thermodynamic database.</p>
     
     Returns
     ----------
-    list of int
-        A list of OBIGT database indices (ispecies) that have been added.
+    a : list of int
+        A list of OBIGT database indices (ispecies) that have been added or
+        modified.
     &#34;&#34;&#34;
     
     args={&#39;file&#39;:file}
@@ -967,13 +1022,13 @@ Add or modify species in the thermodynamic database.</p>
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter(&#34;always&#34;)
-        a = CHNOSZ.add_OBIGT(**args)
+        ispecies = CHNOSZ.add_OBIGT(**args)
     
     if messages:
         for warning in w:
             print(warning.message)
     
-    return list(a)</code></pre>
+    return list(ispecies)</code></pre>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.affinity"><code class="name flex">
@@ -1187,13 +1242,13 @@ elemental composition.</dd>
     
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter(&#34;always&#34;)
-        a = CHNOSZ.basis(**args)
+        bout = CHNOSZ.basis(**args)
         
     if messages:
         for warning in w:
             print(warning.message)
     
-    return pandas2ri.ri2py_dataframe(a)</code></pre>
+    return pandas2ri.ri2py_dataframe(bout)</code></pre>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.diagram"><code class="name flex">
@@ -1728,6 +1783,78 @@ formulas.</dd>
         return list(a)</code></pre>
 </details>
 </dd>
+<dt id="pyCHNOSZ.fun.mod_OBIGT"><code class="name flex">
+<span>def <span class="ident">mod_OBIGT</span></span>(<span>*args, messages=True, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Python wrapper for the mod.OBIGT() function in CHNOSZ.
+Modify species in the OBIGT thermodynamic database. Optionally, supply a
+Pandas dataframe containing custom data.</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>*args</code></strong> :&ensp;<code>str, numeric,</code> or <code>Pandas dataframe</code></dt>
+<dd>Species names or thermodynamic database index numbers to modify. If a
+Pandas dataframe, database entries to add or modify.</dd>
+<dt><strong><code>*kwargs</code></strong> :&ensp;<code>str</code> or <code>numeric</code></dt>
+<dd>Properties of species to modify in the thermodynamic database.</dd>
+<dt><strong><code>messages</code></strong> :&ensp;<code>bool</code>, default <code>True</code></dt>
+<dd>Print messages from CHNOSZ?</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>list</code> of <code>int</code></dt>
+<dd>A list of OBIGT database indices (ispecies) that have been added or
+modified.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def mod_OBIGT(*args, messages=True, **kwargs):
+    
+    &#34;&#34;&#34;
+    Python wrapper for the mod.OBIGT() function in CHNOSZ.
+    Modify species in the OBIGT thermodynamic database. Optionally, supply a
+    Pandas dataframe containing custom data.
+    
+    Parameters
+    ----------
+    *args : str, numeric, or Pandas dataframe
+        Species names or thermodynamic database index numbers to modify. If a
+        Pandas dataframe, database entries to add or modify.
+    
+    *kwargs : str or numeric
+        Properties of species to modify in the thermodynamic database.
+    
+    messages : bool, default True
+        Print messages from CHNOSZ?
+    
+    Returns
+    ----------
+    list of int
+        A list of OBIGT database indices (ispecies) that have been added or
+        modified.
+    &#34;&#34;&#34;
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter(&#34;always&#34;)
+        
+        if isinstance(args[0], pd.DataFrame):
+            arg_list = list(args)
+            arg_list[0] = pandas2ri.py2ri(arg_list[0])
+            args = tuple(arg_list)
+        else:
+            pass
+        
+        ispecies = CHNOSZ.mod_OBIGT(*args, **kwargs)
+    
+    if messages:
+        for warning in w:
+            print(warning.message)
+    
+    return list(ispecies)</code></pre>
+</details>
+</dd>
 <dt id="pyCHNOSZ.fun.reset"><code class="name flex">
 <span>def <span class="ident">reset</span></span>(<span>messages=True)</span>
 </code></dt>
@@ -1762,7 +1889,7 @@ computational settings, thermodynamic database, and system settings
     
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter(&#34;always&#34;)
-        a = CHNOSZ.reset()
+        CHNOSZ.reset()
         
     if messages:
         for warning in w:
@@ -1856,13 +1983,13 @@ species from basis species defined by <code><a title="pyCHNOSZ.fun.basis" href="
     
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter(&#34;always&#34;)
-        a = CHNOSZ.species(**args)
+        sout = CHNOSZ.species(**args)
         
     if messages:
         for warning in w:
             print(warning.message)
     
-    return pandas2ri.ri2py_dataframe(a)</code></pre>
+    return pandas2ri.ri2py_dataframe(sout)</code></pre>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.subcrt"><code class="name flex">
@@ -2112,6 +2239,7 @@ generated.</dd>
     warnings : pd.Dataframe
         Pandas dataframe of calculation warnings. Only present if warnings were
         generated.
+        
     &#34;&#34;&#34;
     def __init__(self, args): 
         for k in args:
@@ -2143,6 +2271,7 @@ generated.</dd>
 <li><code><a title="pyCHNOSZ.fun.diagram" href="#pyCHNOSZ.fun.diagram">diagram</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.equilibrate" href="#pyCHNOSZ.fun.equilibrate">equilibrate</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.info" href="#pyCHNOSZ.fun.info">info</a></code></li>
+<li><code><a title="pyCHNOSZ.fun.mod_OBIGT" href="#pyCHNOSZ.fun.mod_OBIGT">mod_OBIGT</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.reset" href="#pyCHNOSZ.fun.reset">reset</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.species" href="#pyCHNOSZ.fun.species">species</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.subcrt" href="#pyCHNOSZ.fun.subcrt">subcrt</a></code></li>

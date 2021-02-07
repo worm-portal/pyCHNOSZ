@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="pyCHNOSZ",
-    version="0.1.0",
+    version="0.1.1",
     author="Grayson Boyer",
     author_email="gmboyer@asu.edu",
     description="Python wrapper for the R package CHNOSZ.",
