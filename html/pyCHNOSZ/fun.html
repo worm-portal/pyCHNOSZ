@@ -108,6 +108,70 @@ def _convert_to_RVector(value, force_Rvec=True):
     else:
         return ro.StrVector(value)
 
+    
+def seq2aa(protein, sequence, messages=True):
+    
+    &#34;&#34;&#34;
+    Python wrapper for the seq2aa() function in CHNOSZ.
+    Returns a data frame of amino acid composition corresponding to the provided
+    sequence.
+    
+    Parameters
+    ----------
+    protein : str
+        Protein name with an underscore, e.g., &#39;LYSC_CHICK&#39;
+    
+    sequence : str
+        Amino acid sequence of the protein.
+    
+    Returns
+    -------
+    Pandas dataframe
+        Amino acid composition of protein.
+    &#34;&#34;&#34;
+    
+    args = {&#39;protein&#39;:protein, &#39;sequence&#39;:sequence}
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter(&#34;always&#34;)
+        pout = CHNOSZ.seq2aa(**args)
+
+    if messages:
+        for warning in w:
+            print(warning.message)
+    
+    return pandas2ri.ri2py_dataframe(pout)
+
+
+def add_protein(aa, messages=True):
+    
+    &#34;&#34;&#34;
+    Python wrapper for the add.protein() function in CHNOSZ.
+    Add proteins to the OBIGT thermodynamic database.
+    
+    Parameters
+    ----------
+    aa : Pandas dataframe
+        Amino acid composition of protein(s) from `seq2aa`.
+    
+    Returns
+    -------
+    list of int
+        List of protein indices, iprotein.
+    &#34;&#34;&#34;
+    aa = pandas2ri.py2ri(aa)
+    args = {&#39;aa&#39;:aa}
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter(&#34;always&#34;)
+        apout = CHNOSZ.add_protein(**args)
+
+    if messages:
+        for warning in w:
+            print(warning.message)
+    
+    return list(apout)
+
 
 def equilibrate(aout, balance=None, loga_balance=None, ispecies=None,
                 normalize=False, messages=True):
@@ -469,7 +533,7 @@ def affinity(property=None, sout=None, exceed_Ttr=False,
     
     if property != None: args[&#34;property&#34;] = property
     if sout != None: args[&#34;sout&#34;] = sout
-    if iprotein != None: args[&#34;iprotein&#34;] = iprotein
+    if iprotein != None: args[&#34;iprotein&#34;] = _convert_to_RVector(iprotein)
     if transect != None: args[&#34;transect&#34;] = transect
     
     for key, value in kwargs.items():
@@ -1031,6 +1095,56 @@ modified.</dd>
     return list(ispecies)</code></pre>
 </details>
 </dd>
+<dt id="pyCHNOSZ.fun.add_protein"><code class="name flex">
+<span>def <span class="ident">add_protein</span></span>(<span>aa, messages=True)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Python wrapper for the add.protein() function in CHNOSZ.
+Add proteins to the OBIGT thermodynamic database.</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>aa</code></strong> :&ensp;<code>Pandas dataframe</code></dt>
+<dd>Amino acid composition of protein(s) from <code><a title="pyCHNOSZ.fun.seq2aa" href="#pyCHNOSZ.fun.seq2aa">seq2aa()</a></code>.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>list</code> of <code>int</code></dt>
+<dd>List of protein indices, iprotein.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_protein(aa, messages=True):
+    
+    &#34;&#34;&#34;
+    Python wrapper for the add.protein() function in CHNOSZ.
+    Add proteins to the OBIGT thermodynamic database.
+    
+    Parameters
+    ----------
+    aa : Pandas dataframe
+        Amino acid composition of protein(s) from `seq2aa`.
+    
+    Returns
+    -------
+    list of int
+        List of protein indices, iprotein.
+    &#34;&#34;&#34;
+    aa = pandas2ri.py2ri(aa)
+    args = {&#39;aa&#39;:aa}
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter(&#34;always&#34;)
+        apout = CHNOSZ.add_protein(**args)
+
+    if messages:
+        for warning in w:
+            print(warning.message)
+    
+    return list(apout)</code></pre>
+</details>
+</dd>
 <dt id="pyCHNOSZ.fun.affinity"><code class="name flex">
 <span>def <span class="ident">affinity</span></span>(<span>property=None, sout=None, exceed_Ttr=False, exceed_rhomin=False, return_buffer=False, return_sout=False, balance='PBB', iprotein=None, loga_protein=-3, transect=None, messages=True, **kwargs)</span>
 </code></dt>
@@ -1150,7 +1264,7 @@ of interest in the calculations.</dd>
     
     if property != None: args[&#34;property&#34;] = property
     if sout != None: args[&#34;sout&#34;] = sout
-    if iprotein != None: args[&#34;iprotein&#34;] = iprotein
+    if iprotein != None: args[&#34;iprotein&#34;] = _convert_to_RVector(iprotein)
     if transect != None: args[&#34;transect&#34;] = transect
     
     for key, value in kwargs.items():
@@ -1896,6 +2010,63 @@ computational settings, thermodynamic database, and system settings
             print(warning.message)</code></pre>
 </details>
 </dd>
+<dt id="pyCHNOSZ.fun.seq2aa"><code class="name flex">
+<span>def <span class="ident">seq2aa</span></span>(<span>protein, sequence, messages=True)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Python wrapper for the seq2aa() function in CHNOSZ.
+Returns a data frame of amino acid composition corresponding to the provided
+sequence.</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>protein</code></strong> :&ensp;<code>str</code></dt>
+<dd>Protein name with an underscore, e.g., 'LYSC_CHICK'</dd>
+<dt><strong><code>sequence</code></strong> :&ensp;<code>str</code></dt>
+<dd>Amino acid sequence of the protein.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Pandas dataframe</code></dt>
+<dd>Amino acid composition of protein.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def seq2aa(protein, sequence, messages=True):
+    
+    &#34;&#34;&#34;
+    Python wrapper for the seq2aa() function in CHNOSZ.
+    Returns a data frame of amino acid composition corresponding to the provided
+    sequence.
+    
+    Parameters
+    ----------
+    protein : str
+        Protein name with an underscore, e.g., &#39;LYSC_CHICK&#39;
+    
+    sequence : str
+        Amino acid sequence of the protein.
+    
+    Returns
+    -------
+    Pandas dataframe
+        Amino acid composition of protein.
+    &#34;&#34;&#34;
+    
+    args = {&#39;protein&#39;:protein, &#39;sequence&#39;:sequence}
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter(&#34;always&#34;)
+        pout = CHNOSZ.seq2aa(**args)
+
+    if messages:
+        for warning in w:
+            print(warning.message)
+    
+    return pandas2ri.ri2py_dataframe(pout)</code></pre>
+</details>
+</dd>
 <dt id="pyCHNOSZ.fun.species"><code class="name flex">
 <span>def <span class="ident">species</span></span>(<span>species=None, state=None, delete=False, add=False, index_return=False, messages=True)</span>
 </code></dt>
@@ -2266,6 +2437,7 @@ generated.</dd>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="two-column">
 <li><code><a title="pyCHNOSZ.fun.add_OBIGT" href="#pyCHNOSZ.fun.add_OBIGT">add_OBIGT</a></code></li>
+<li><code><a title="pyCHNOSZ.fun.add_protein" href="#pyCHNOSZ.fun.add_protein">add_protein</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.affinity" href="#pyCHNOSZ.fun.affinity">affinity</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.basis" href="#pyCHNOSZ.fun.basis">basis</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.diagram" href="#pyCHNOSZ.fun.diagram">diagram</a></code></li>
@@ -2273,6 +2445,7 @@ generated.</dd>
 <li><code><a title="pyCHNOSZ.fun.info" href="#pyCHNOSZ.fun.info">info</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.mod_OBIGT" href="#pyCHNOSZ.fun.mod_OBIGT">mod_OBIGT</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.reset" href="#pyCHNOSZ.fun.reset">reset</a></code></li>
+<li><code><a title="pyCHNOSZ.fun.seq2aa" href="#pyCHNOSZ.fun.seq2aa">seq2aa</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.species" href="#pyCHNOSZ.fun.species">species</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.subcrt" href="#pyCHNOSZ.fun.subcrt">subcrt</a></code></li>
 </ul>

@@ -80,6 +80,70 @@ def _convert_to_RVector(value, force_Rvec=True):
     else:
         return ro.StrVector(value)
 
+    
+def seq2aa(protein, sequence, messages=True):
+    
+    """
+    Python wrapper for the seq2aa() function in CHNOSZ.
+    Returns a data frame of amino acid composition corresponding to the provided
+    sequence.
+    
+    Parameters
+    ----------
+    protein : str
+        Protein name with an underscore, e.g., 'LYSC_CHICK'
+    
+    sequence : str
+        Amino acid sequence of the protein.
+    
+    Returns
+    -------
+    Pandas dataframe
+        Amino acid composition of protein.
+    """
+    
+    args = {'protein':protein, 'sequence':sequence}
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        pout = CHNOSZ.seq2aa(**args)
+
+    if messages:
+        for warning in w:
+            print(warning.message)
+    
+    return pandas2ri.ri2py_dataframe(pout)
+
+
+def add_protein(aa, messages=True):
+    
+    """
+    Python wrapper for the add.protein() function in CHNOSZ.
+    Add proteins to the OBIGT thermodynamic database.
+    
+    Parameters
+    ----------
+    aa : Pandas dataframe
+        Amino acid composition of protein(s) from `seq2aa`.
+    
+    Returns
+    -------
+    list of int
+        List of protein indices, iprotein.
+    """
+    aa = pandas2ri.py2ri(aa)
+    args = {'aa':aa}
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        apout = CHNOSZ.add_protein(**args)
+
+    if messages:
+        for warning in w:
+            print(warning.message)
+    
+    return list(apout)
+
 
 def equilibrate(aout, balance=None, loga_balance=None, ispecies=None,
                 normalize=False, messages=True):
@@ -441,7 +505,7 @@ def affinity(property=None, sout=None, exceed_Ttr=False,
     
     if property != None: args["property"] = property
     if sout != None: args["sout"] = sout
-    if iprotein != None: args["iprotein"] = iprotein
+    if iprotein != None: args["iprotein"] = _convert_to_RVector(iprotein)
     if transect != None: args["transect"] = transect
     
     for key, value in kwargs.items():
