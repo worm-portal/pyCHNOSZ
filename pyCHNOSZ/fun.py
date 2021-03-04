@@ -17,6 +17,7 @@ with warnings.catch_warnings():
     CHNOSZ = importr("CHNOSZ")
     grdev = importr('grDevices')
 
+NumberTypes = (int, float, complex)
 
 @contextmanager
 def __r_inline_plot(width=600, height=600, dpi=100):
@@ -79,8 +80,195 @@ def _convert_to_RVector(value, force_Rvec=True):
         return ro.FloatVector(value)
     else:
         return ro.StrVector(value)
-
+            
+def entropy(formula, messages=True):
     
+    """
+    Python wrapper for the entropy() function in CHNOSZ.
+    Calculate the standard molal entropy of elements in a compound.
+    
+    Parameters
+    ----------
+    formula : str, int, or list of str or int
+        Supply a chemical formula (e.g. "CH4"), a species index, or a list of
+        formulas or indices.
+
+    messages : bool, default True
+        Display messages from CHNOSZ?
+    
+    Returns
+    ----------
+    out : float or list of float
+        Standard molal entropy of elements in the formula in cal/(mol K).
+        Returns a list if `formula` is a list.
+    """
+    
+    formula_R = _convert_to_RVector(formula, force_Rvec=False)
+    
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        out = CHNOSZ.entropy(formula_R)
+
+    if messages:
+        for warning in w:
+            print(warning.message)
+    
+    out = list(out)
+    if not isinstance(formula, list):
+        out = out[0]
+    
+    return out
+
+
+def mass(formula, messages=True):
+    
+    """
+    Python wrapper for the mass() function in CHNOSZ.
+    Calculate the mass of the sum of elements in a formula.
+    
+    Parameters
+    ----------
+    formula : str, int, or list of str or int
+        Supply a chemical formula (e.g. "CH4"), a species index, or a list of
+        formulas or indices.
+
+    messages : bool, default True
+        Display messages from CHNOSZ?
+    
+    Returns
+    ----------
+    out : float or list of float
+        Molar mass of the sum of elements in the formula, in g/mol.
+        Returns a list if `formula` is a list.
+    """
+    
+    formula_R = _convert_to_RVector(formula, force_Rvec=False)
+    print(formula_R)
+    
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        out = CHNOSZ.mass(formula_R)
+
+    if messages:
+        for warning in w:
+            print(warning.message)
+    
+    out = list(out)
+    if not isinstance(formula, list):
+        out = out[0]
+    
+    return out
+
+
+def ZC(formula, messages=True):
+    
+    """
+    Python wrapper for the ZC() function in CHNOSZ.
+    Calculate the average oxidation state of carbon (ZC) in a molecule.
+    
+    Parameters
+    ----------
+    formula : str or list of str
+        Chemical formula(s) of molecules.
+
+    messages : bool, default True
+        Display messages from CHNOSZ?
+    
+    Returns
+    ----------
+    out : float or list of float
+        The average oxidation state of carbon in the formula.
+        Returns a list if `formula` is a list.
+    """
+    
+    formula_R = _convert_to_RVector(formula, force_Rvec=False)
+    
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        out = CHNOSZ.ZC(formula_R)
+
+    if messages:
+        for warning in w:
+            print(warning.message)
+    
+    out = list(out)
+    if not isinstance(formula, list):
+        out = out[0]
+    
+    return out
+
+
+def makeup(formula, multiplier=1, sum=False, count_zero=False, messages=True):
+    
+    """
+    Python wrapper for the makeup() function in CHNOSZ.
+    Parse a formula into a dictionary of elements and their counts.
+    
+    Parameters
+    ----------
+    formula : str or list of str
+        Chemical formula or a list of chemical formulas.
+
+    multiplier : numeric, default 1
+        Multiplier for the elemental counts in each formula.
+    
+    sum : bool, default False
+        Add together the elemental counts in all formulas?
+        Ignored if `formula` is not a list.
+    
+    count_zero : bool, default False
+        Include zero counts for an element if it is not in this formula, but is
+        found in another formula in the list? Ensures that the dictionaries
+        returned for each formula have the same length.
+        Ignored if `formula` is not a list.
+
+    messages : bool, default True
+        Display messages from CHNOSZ?
+    
+    Returns
+    ----------
+    out : dict
+        Dictionary of elements and their counts in the formula(s).
+    """
+    
+    formula_R = _convert_to_RVector(formula, force_Rvec=False)
+    
+    args = {'formula':formula_R, "multiplier":multiplier,
+            "sum":sum, "count.zero":count_zero}
+    
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        out = CHNOSZ.makeup(**args)
+        
+    if messages:
+        for warning in w:
+            print(warning.message)
+    
+    if isinstance(out, ro.ListVector):
+        out_dict = {}
+        for i, molecule in enumerate(formula):
+            molecule_dict = {}
+            if not count_zero:
+                out_names = out[i].names
+            else:
+                out_names = out[i].names[0]
+
+            for ii, elem in enumerate(out_names):
+                molecule_dict[elem] = out[i][ii]
+            out_dict[molecule] = molecule_dict
+            
+    else:
+        out_dict = {}
+        if not sum or not isinstance(formula, list):
+            out_names = out.names
+        else:
+            out_names = out.names[0]
+        for i, elem in enumerate(out_names):
+            out_dict[elem] = out[i]
+    
+    return out_dict
+
+
 def seq2aa(protein, sequence, messages=True):
     
     """
@@ -95,6 +283,9 @@ def seq2aa(protein, sequence, messages=True):
     
     sequence : str
         Amino acid sequence of the protein.
+
+    messages : bool, default True
+        Display messages from CHNOSZ?
     
     Returns
     -------
@@ -125,6 +316,9 @@ def add_protein(aa, messages=True):
     ----------
     aa : Pandas dataframe
         Amino acid composition of protein(s) from `seq2aa`.
+        
+    messages : bool, default True
+        Display messages from CHNOSZ?
     
     Returns
     -------
@@ -296,7 +490,7 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
         Method used in splinefun.
 
     contour_method : str, optional
-        Labelling method used in contour (use NULL for no labels).
+        Labelling method used in contour (use None for no labels).
 
     levels : numeric, optional
         Levels at which to draw contour lines.
@@ -352,7 +546,7 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
         of the total plot area.
 
     main : str, optional
-        A main title for the plot; NULL means to plot no title.
+        A main title for the plot; None means to plot no title.
 
     legend_x : str, optional
         Description of legend placement passed to legend.
@@ -536,7 +730,7 @@ def species(species=None, state=None, delete=False, add=False,
     ----------
     species : str, int, or list of str or int
         Names or formulas of species to add to the species definition; int,
-        rownumbers of species to modify or delete.
+        rownumbers of species in OBIGT to modify or delete.
 
     state : str or list of str, optional
         physical states; numeric, logarithms of activities or fugacities.
@@ -981,5 +1175,103 @@ class SubcrtOutput(object):
         for k in args:
             setattr(self, k, args[k])
 
+    def __getitem__(self, item):
+         return getattr(self, item)
+
+
+class thermo(object):
+    
+    """
+    Python wrapper for the thermo() object in CHNOSZ.
+    See the original CHNOSZ documentation for in-depth descriptions of each
+    attribute: https://chnosz.net/manual/thermo.html
+    
+    Attributes
+    ----------
+    OBIGT : pd.DataFrame
+        A thermodynamic database of standard molal thermodynamic properties and
+        equations of state parameters of species.
+    
+    basis : pd.DataFrame
+        Initially `None`, reserved for a dataframe written by basis upon
+        definition of the basis species.
+    
+    buffer : pd.DataFrame
+        Contains definitions of buffers of chemical activity.
+    
+    element : pd.DataFrame
+        Containins the thermodynamic properties of elements taken from Cox et
+        al., 1989, Wagman et al., 1982, and (for Am, Pu, Np, Cm) Thoenen et al.,
+        2014.
+    
+    groups : pd.DataFrame
+        A dataframe with 22 columns for the amino acid sidechain, backbone and
+        protein backbone groups ([Ala]..[Tyr],[AABB],[UPBB]) whose rows
+        correspond to the elements C, H, N, O, S. It is used to quickly
+        calculate the chemical formulas of proteins that are selected using the
+        iprotein argument in `affinity`.
+    
+    opar : dict
+        Stores parameters of the last plot generated in pyCHNOSZ. If a plot has
+        not yet been generated, `opar` is `None`.
+        
+    opt : dict
+        Dictionary of computational settings.
+
+    protein : pd.DataFrame
+        Amino acid compositions of selected proteins.
+        
+    refs : pd.DataFrame
+        References for thermodynamic data.
+        
+    stoich : pd.DataFrame
+        A precalculated stoichiometric matrix for the default database.
+        
+    species : pd.DataFrame
+        Initially `None`, reserved for a dataframe generated by species to
+        define the species of interest.
+        
+    """
+    
+    def __init__(self, messages=True, **kwargs):
+        
+        args = {}
+        
+        for key, value in kwargs.items():
+            if isinstance(value, list) or isinstance(value, str) or isinstance(value, NumberTypes):
+                value = _convert_to_RVector(value, force_Rvec=False)
+            elif isinstance(value, pd.DataFrame):
+                value = pandas2ri.py2ri_dataframe(value)
+            else:
+                pass
+            args.update({key:value})
+        
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            t = CHNOSZ.thermo(**args)
+
+        if messages:
+            for warning in w:
+                print(warning.message)
+        
+        for i, name in enumerate(t.names):
+            if isinstance(t[i], ro.DataFrame) or isinstance(t[i], ro.Matrix):
+                attr = pandas2ri.ri2py_dataframe(t[i])
+            elif isinstance(t[i], ro.ListVector):
+                attr = {}
+                for ii, subname in enumerate(t[i].names):
+                    attr[subname] = list(t[i][ii])
+            elif isinstance(t[i], ro.FloatVector) or isinstance(t[i], ro.IntVector) or isinstance(t[i], ro.StrVector):
+                attr = list(t[i])
+                if len(t[i]) == 1:
+                    attr = attr[0]
+            elif t[i] == ro.r("NULL"):
+                attr = None
+            else:
+                attr = t[i]
+            
+            
+            setattr(self, name, attr)
+            
     def __getitem__(self, item):
          return getattr(self, item)
