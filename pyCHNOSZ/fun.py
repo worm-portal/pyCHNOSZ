@@ -81,6 +81,73 @@ def _convert_to_RVector(value, force_Rvec=True):
     else:
         return ro.StrVector(value)
             
+
+def water(property=None, T=298.15, P="Psat", P1=True, messages=True):
+    
+    """
+    Python wrapper for the water() function in CHNOSZ.
+    Calculate thermodynamic and electrostatic properties of water.
+    
+    Parameters
+    ----------
+    property : str or list of str, optional
+        Computational setting or property(s) to calculate. To set a water model,
+        use 'SUPCRT92' (default) or 'SUPCRT', 'IAPWS95' or 'IAPWS', or 'DEW'.
+        To calculate a property, use 'A', 'G', 'S', 'U', etc. See 
+        http://chnosz.net/manual/water.html for the complete catalog of
+        properties that can be calculated, their units, and their availability
+        in water models.
+
+    T : numeric, default 298.15
+        Temperature (K)
+
+    P : numeric, default "Psat"
+        Pressure (bar), or Psat for vapor-liquid saturation.
+
+    P1 : bool, default True
+        Output pressure of 1 bar below 100 °C instead of calculated values of Psat?
+
+    messages : bool, default True
+        Display messages from CHNOSZ?
+
+    Returns
+    ----------
+    out : float or dict
+        Calculated value of desired water property. If `property` is a list,
+        returns a dictionary of calculated values.
+    """
+    
+    if property == None:
+        property = ro.r("NULL")
+    elif isinstance(property, list):
+        property = _convert_to_RVector(property, force_Rvec=True)
+    else:
+        pass
+    
+    args = {'property':property, 'T':T, 'P':P, 'P1':P1}
+    
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        out = CHNOSZ.water(**args)
+
+    if messages:
+        for warning in w:
+            print(warning.message)
+    
+    if property not in ["SUPCRT92", "SUPCRT", "IAPWS95", "IAPWS", "DEW"]:
+        out = list(out)
+        if len(out) == 1:
+            if property == ro.r("NULL"):
+                out = out[0]
+            else:
+                out = out[0][0]
+        else:
+            # CHNOSZ produces a single-row dataframe when multiple properties
+            # are supplied to `property`. Here, a dictionary is returned.
+            out = {prop:o[0] for prop,o in zip(property, out)}
+        return out
+        
+        
 def entropy(formula, messages=True):
     
     """
@@ -160,7 +227,7 @@ def mass(formula, messages=True):
     return out
 
 
-def ZC(formula, messages=True):
+def zc(formula, messages=True):
     
     """
     Python wrapper for the ZC() function in CHNOSZ.
