@@ -48,16 +48,17 @@ with warnings.catch_warnings():
 NumberTypes = (int, float, complex)
 
 @contextmanager
-def __r_inline_plot(width=600, height=600, dpi=100):
+def __r_inline_plot(width=600, height=520, dpi=150):
     
     &#34;&#34;&#34;
     Display R plots inline.
 
     Parameters
     ----------
-    width, height : int or float, default 600
+    width, height : numeric, default 600 by 520
         Width and height of the plot.
-    dpi : int or float, default 100
+        
+    dpi : numeric, default 150
         Resolution of the plot.
     &#34;&#34;&#34;
     
@@ -501,6 +502,7 @@ def diagram(eout, ptype=&#39;auto&#39;, alpha=False, normalize=False,
             dx=0, dy=0, srt=0, min_area=0,
             main=None, legend_x=None,
             add=False, plot_it=True, tplot=True,
+            width=600, height=520, dpi=150,
             messages=True):
     
     &#34;&#34;&#34;
@@ -655,6 +657,12 @@ def diagram(eout, ptype=&#39;auto&#39;, alpha=False, normalize=False,
     tplot : bool, default True
         Set up plot with thermo.plot.new?
     
+    width, height : numeric, default 600 by 520
+        Width and height of the plot.
+        
+    dpi : numeric, default 150
+        Resolution of the plot.
+    
     messages : bool, default True
         Display messages from CHNOSZ?
     
@@ -702,7 +710,7 @@ def diagram(eout, ptype=&#39;auto&#39;, alpha=False, normalize=False,
     
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter(&#34;always&#34;)
-        with __r_inline_plot(width=1024, height=896, dpi=150):
+        with __r_inline_plot(width=width, height=height, dpi=dpi):
             if isinstance(add, bool):
                 if add: # add=&#39;True&#39; does not work with the current pyCHNOSZ framework
                     raise Exception(&#34;The argument &#39;add&#39; must be assigned the output of the previous diagram(s).&#34;)
@@ -1730,7 +1738,7 @@ elemental composition.</dd>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.diagram"><code class="name flex">
-<span>def <span class="ident">diagram</span></span>(<span>eout, ptype='auto', alpha=False, normalize=False, as_residue=False, balance=None, groups=None, xrange=None, mar=None, yline=None, side=[1, 2, 3, 4], ylog=True, xlim=None, ylim=None, xlab=None, ylab=None, cex=None, cex_names=None, cex_axis=None, lty=None, lwd=None, dotted=None, spline_method=None, contour_method=None, levels=None, col=None, col_names=None, fill=None, fill_NA='gray80', limit_water=None, names=None, format_names=True, bold=False, italic=False, font=None, family=None, adj=0.5, dx=0, dy=0, srt=0, min_area=0, main=None, legend_x=None, add=False, plot_it=True, tplot=True, messages=True)</span>
+<span>def <span class="ident">diagram</span></span>(<span>eout, ptype='auto', alpha=False, normalize=False, as_residue=False, balance=None, groups=None, xrange=None, mar=None, yline=None, side=[1, 2, 3, 4], ylog=True, xlim=None, ylim=None, xlab=None, ylab=None, cex=None, cex_names=None, cex_axis=None, lty=None, lwd=None, dotted=None, spline_method=None, contour_method=None, levels=None, col=None, col_names=None, fill=None, fill_NA='gray80', limit_water=None, names=None, format_names=True, bold=False, italic=False, font=None, family=None, adj=0.5, dx=0, dy=0, srt=0, min_area=0, main=None, legend_x=None, add=False, plot_it=True, tplot=True, width=600, height=520, dpi=150, messages=True)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Python wrapper for the diagram() function in CHNOSZ.
@@ -1837,6 +1845,10 @@ of the total plot area.</dd>
 <dd>Make a plot?</dd>
 <dt><strong><code>tplot</code></strong> :&ensp;<code>bool</code>, default <code>True</code></dt>
 <dd>Set up plot with thermo.plot.new?</dd>
+<dt><strong><code>width</code></strong>, <strong><code>height</code></strong> :&ensp;<code>numeric</code>, default <code>600 by 520</code></dt>
+<dd>Width and height of the plot.</dd>
+<dt><strong><code>dpi</code></strong> :&ensp;<code>numeric</code>, default <code>150</code></dt>
+<dd>Resolution of the plot.</dd>
 <dt><strong><code>messages</code></strong> :&ensp;<code>bool</code>, default <code>True</code></dt>
 <dd>Display messages from CHNOSZ?</dd>
 </dl>
@@ -1865,6 +1877,7 @@ of the total plot area.</dd>
             dx=0, dy=0, srt=0, min_area=0,
             main=None, legend_x=None,
             add=False, plot_it=True, tplot=True,
+            width=600, height=520, dpi=150,
             messages=True):
     
     &#34;&#34;&#34;
@@ -2019,6 +2032,12 @@ of the total plot area.</dd>
     tplot : bool, default True
         Set up plot with thermo.plot.new?
     
+    width, height : numeric, default 600 by 520
+        Width and height of the plot.
+        
+    dpi : numeric, default 150
+        Resolution of the plot.
+    
     messages : bool, default True
         Display messages from CHNOSZ?
     
@@ -2066,7 +2085,7 @@ of the total plot area.</dd>
     
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter(&#34;always&#34;)
-        with __r_inline_plot(width=1024, height=896, dpi=150):
+        with __r_inline_plot(width=width, height=height, dpi=dpi):
             if isinstance(add, bool):
                 if add: # add=&#39;True&#39; does not work with the current pyCHNOSZ framework
                     raise Exception(&#34;The argument &#39;add&#39; must be assigned the output of the previous diagram(s).&#34;)

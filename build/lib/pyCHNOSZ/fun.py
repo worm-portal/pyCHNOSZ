@@ -20,16 +20,17 @@ with warnings.catch_warnings():
 NumberTypes = (int, float, complex)
 
 @contextmanager
-def __r_inline_plot(width=600, height=600, dpi=100):
+def __r_inline_plot(width=600, height=520, dpi=150):
     
     """
     Display R plots inline.
 
     Parameters
     ----------
-    width, height : int or float, default 600
+    width, height : numeric, default 600 by 520
         Width and height of the plot.
-    dpi : int or float, default 100
+        
+    dpi : numeric, default 150
         Resolution of the plot.
     """
     
@@ -473,6 +474,7 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
             dx=0, dy=0, srt=0, min_area=0,
             main=None, legend_x=None,
             add=False, plot_it=True, tplot=True,
+            width=600, height=520, dpi=150,
             messages=True):
     
     """
@@ -627,6 +629,12 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
     tplot : bool, default True
         Set up plot with thermo.plot.new?
     
+    width, height : numeric, default 600 by 520
+        Width and height of the plot.
+        
+    dpi : numeric, default 150
+        Resolution of the plot.
+    
     messages : bool, default True
         Display messages from CHNOSZ?
     
@@ -674,7 +682,7 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
     
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        with __r_inline_plot(width=1024, height=896, dpi=150):
+        with __r_inline_plot(width=width, height=height, dpi=dpi):
             if isinstance(add, bool):
                 if add: # add='True' does not work with the current pyCHNOSZ framework
                     raise Exception("The argument 'add' must be assigned the output of the previous diagram(s).")
