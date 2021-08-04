@@ -626,13 +626,13 @@ def diagram(eout, ptype=&#39;auto&#39;, alpha=False, normalize=False,
     family : str, optional
         Font family for names.
 
-    adj : numeric, default 0.5
+    adj : numeric or list, default 0.5
         Adjustment for line labels.
 
-    dx : numeric, default 0
+    dx : numeric or list, default 0
         X offset for line or field labels.
 
-    dy : numeric, default 0
+    dy : numeric or list, default 0
         Y offset for line or field labels.
 
     srt : numeric, default 0
@@ -705,6 +705,12 @@ def diagram(eout, ptype=&#39;auto&#39;, alpha=False, normalize=False,
     if names != None: args[&#34;names&#34;] = _convert_to_RVector(names)
     if font != None: args[&#34;font&#34;] = _convert_to_RVector(font)
     if family != None: args[&#34;family&#34;] = _convert_to_RVector(family)
+    if isinstance(adj, list):
+        args[&#34;adj&#34;] = _convert_to_RVector(adj)
+    if isinstance(dx, list):
+        args[&#34;dx&#34;] = _convert_to_RVector(dx)
+    if isinstance(dy, list):
+        args[&#34;dy&#34;] = _convert_to_RVector(dy)
     if main != None: args[&#34;main&#34;] = main
     if legend_x != None: args[&#34;legend.x&#34;] = legend_x
     
@@ -1824,11 +1830,11 @@ gain the effect of dotted or dashed boundary lines).</dd>
 <dd>Font type for names (has no effect if format.names is TRUE).</dd>
 <dt><strong><code>family</code></strong> :&ensp;<code>str</code>, optional</dt>
 <dd>Font family for names.</dd>
-<dt><strong><code>adj</code></strong> :&ensp;<code>numeric</code>, default <code>0.5</code></dt>
+<dt><strong><code>adj</code></strong> :&ensp;<code>numeric</code> or <code>list</code>, default <code>0.5</code></dt>
 <dd>Adjustment for line labels.</dd>
-<dt><strong><code>dx</code></strong> :&ensp;<code>numeric</code>, default <code>0</code></dt>
+<dt><strong><code>dx</code></strong> :&ensp;<code>numeric</code> or <code>list</code>, default <code>0</code></dt>
 <dd>X offset for line or field labels.</dd>
-<dt><strong><code>dy</code></strong> :&ensp;<code>numeric</code>, default <code>0</code></dt>
+<dt><strong><code>dy</code></strong> :&ensp;<code>numeric</code> or <code>list</code>, default <code>0</code></dt>
 <dd>Y offset for line or field labels.</dd>
 <dt><strong><code>srt</code></strong> :&ensp;<code>numeric</code>, default <code>0</code></dt>
 <dd>Rotation for line labels.</dd>
@@ -2001,13 +2007,13 @@ of the total plot area.</dd>
     family : str, optional
         Font family for names.
 
-    adj : numeric, default 0.5
+    adj : numeric or list, default 0.5
         Adjustment for line labels.
 
-    dx : numeric, default 0
+    dx : numeric or list, default 0
         X offset for line or field labels.
 
-    dy : numeric, default 0
+    dy : numeric or list, default 0
         Y offset for line or field labels.
 
     srt : numeric, default 0
@@ -2080,6 +2086,12 @@ of the total plot area.</dd>
     if names != None: args[&#34;names&#34;] = _convert_to_RVector(names)
     if font != None: args[&#34;font&#34;] = _convert_to_RVector(font)
     if family != None: args[&#34;family&#34;] = _convert_to_RVector(family)
+    if isinstance(adj, list):
+        args[&#34;adj&#34;] = _convert_to_RVector(adj)
+    if isinstance(dx, list):
+        args[&#34;dx&#34;] = _convert_to_RVector(dx)
+    if isinstance(dy, list):
+        args[&#34;dy&#34;] = _convert_to_RVector(dy)
     if main != None: args[&#34;main&#34;] = main
     if legend_x != None: args[&#34;legend.x&#34;] = legend_x
     

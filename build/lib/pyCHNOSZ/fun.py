@@ -598,13 +598,13 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
     family : str, optional
         Font family for names.
 
-    adj : numeric, default 0.5
+    adj : numeric or list, default 0.5
         Adjustment for line labels.
 
-    dx : numeric, default 0
+    dx : numeric or list, default 0
         X offset for line or field labels.
 
-    dy : numeric, default 0
+    dy : numeric or list, default 0
         Y offset for line or field labels.
 
     srt : numeric, default 0
@@ -677,6 +677,12 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
     if names != None: args["names"] = _convert_to_RVector(names)
     if font != None: args["font"] = _convert_to_RVector(font)
     if family != None: args["family"] = _convert_to_RVector(family)
+    if isinstance(adj, list):
+        args["adj"] = _convert_to_RVector(adj)
+    if isinstance(dx, list):
+        args["dx"] = _convert_to_RVector(dx)
+    if isinstance(dy, list):
+        args["dy"] = _convert_to_RVector(dy)
     if main != None: args["main"] = main
     if legend_x != None: args["legend.x"] = legend_x
     
