@@ -20,7 +20,7 @@ with warnings.catch_warnings():
 NumberTypes = (int, float, complex)
 
 @contextmanager
-def __r_inline_plot(width=600, height=520, dpi=150):
+def __r_inline_plot(width=600, height=520, dpi=150, plot_it=True):
     
     """
     Display R plots inline.
@@ -42,7 +42,8 @@ def __r_inline_plot(width=600, height=520, dpi=150):
         yield
 
     data = b.getvalue()
-    display(Image(data=data, format='png', embed=True))
+    if plot_it:
+        display(Image(data=data, format='png', embed=True))
 
     
 def _convert_to_RVector(value, force_Rvec=True):
@@ -688,7 +689,7 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
     
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        with __r_inline_plot(width=width, height=height, dpi=dpi):
+        with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
             if isinstance(add, bool):
                 if add: # add='True' does not work with the current pyCHNOSZ framework
                     raise Exception("The argument 'add' must be assigned the output of the previous diagram(s).")

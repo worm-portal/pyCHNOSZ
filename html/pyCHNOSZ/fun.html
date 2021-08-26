@@ -48,7 +48,7 @@ with warnings.catch_warnings():
 NumberTypes = (int, float, complex)
 
 @contextmanager
-def __r_inline_plot(width=600, height=520, dpi=150):
+def __r_inline_plot(width=600, height=520, dpi=150, plot_it=True):
     
     &#34;&#34;&#34;
     Display R plots inline.
@@ -70,7 +70,8 @@ def __r_inline_plot(width=600, height=520, dpi=150):
         yield
 
     data = b.getvalue()
-    display(Image(data=data, format=&#39;png&#39;, embed=True))
+    if plot_it:
+        display(Image(data=data, format=&#39;png&#39;, embed=True))
 
     
 def _convert_to_RVector(value, force_Rvec=True):
@@ -716,7 +717,7 @@ def diagram(eout, ptype=&#39;auto&#39;, alpha=False, normalize=False,
     
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter(&#34;always&#34;)
-        with __r_inline_plot(width=width, height=height, dpi=dpi):
+        with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
             if isinstance(add, bool):
                 if add: # add=&#39;True&#39; does not work with the current pyCHNOSZ framework
                     raise Exception(&#34;The argument &#39;add&#39; must be assigned the output of the previous diagram(s).&#34;)
@@ -2097,7 +2098,7 @@ of the total plot area.</dd>
     
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter(&#34;always&#34;)
-        with __r_inline_plot(width=width, height=height, dpi=dpi):
+        with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
             if isinstance(add, bool):
                 if add: # add=&#39;True&#39; does not work with the current pyCHNOSZ framework
                     raise Exception(&#34;The argument &#39;add&#39; must be assigned the output of the previous diagram(s).&#34;)
