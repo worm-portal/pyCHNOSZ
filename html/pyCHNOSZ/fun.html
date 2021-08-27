@@ -31,6 +31,9 @@ import warnings
 from contextlib import contextmanager
 from IPython.display import Image, display
 import pandas as pd
+import numpy as np
+import re
+import plotly.express as px
 
 with warnings.catch_warnings():
     warnings.simplefilter(&#34;ignore&#34;)
@@ -46,6 +49,7 @@ with warnings.catch_warnings():
     grdev = importr(&#39;grDevices&#39;)
 
 NumberTypes = (int, float, complex)
+
 
 @contextmanager
 def __r_inline_plot(width=600, height=520, dpi=150, plot_it=True):
@@ -74,6 +78,201 @@ def __r_inline_plot(width=600, height=520, dpi=150, plot_it=True):
         display(Image(data=data, format=&#39;png&#39;, embed=True))
 
     
+def __flatten_list(_2d_list):
+    flat_list = []
+    # Iterate through the outer list
+    for element in _2d_list:
+        if type(element) is list:
+            # If the element is of type list, iterate through the sublist
+            for item in element:
+                flat_list.append(item)
+        else:
+            flat_list.append(element)
+    return flat_list
+
+
+def __format_chemical_name(name):
+    p = re.compile(r&#39;(?P&lt;sp&gt;\+|-\d+?$)&#39;)
+    name = p.sub(r&#39;&lt;sup&gt;\g&lt;sp&gt;&lt;/sup&gt;&#39;, name)
+    
+    name_no_charge = re.match(r&#39;(?:(?!&lt;|$).)*&#39;, name).group(0)
+    mapping = {&#34;0&#34;: &#34;&lt;sub&gt;0&lt;/sub&gt;&#34;, &#34;1&#34;: &#34;&lt;sub&gt;1&lt;/sub&gt;&#34;, &#34;2&#34;: &#34;&lt;sub&gt;2&lt;/sub&gt;&#34;, &#34;3&#34;: &#34;&lt;sub&gt;3&lt;/sub&gt;&#34;, &#34;4&#34;: &#34;&lt;sub&gt;4&lt;/sub&gt;&#34;, 
+           &#34;5&#34;: &#34;&lt;sub&gt;5&lt;/sub&gt;&#34;, &#34;6&#34;: &#34;&lt;sub&gt;6&lt;/sub&gt;&#34;, &#34;7&#34;: &#34;&lt;sub&gt;7&lt;/sub&gt;&#34;, &#34;8&#34;: &#34;&lt;sub&gt;8&lt;/sub&gt;&#34;, &#34;9&#34;: &#34;&lt;sub&gt;9&lt;/sub&gt;&#34;,
+           &#34;.&#34;:&#34;&lt;sub&gt;.&lt;/sub&gt;&#34;}
+    name_no_charge_formatted = &#34;&#34;.join([mapping.get(x) or x for x in list(name_no_charge)])
+    name = re.sub(name_no_charge, name_no_charge_formatted, name)
+
+    return(name)
+
+
+def diagram_interactive(data, balance=None, width=600, height=520, alpha=False, messages=True):
+    
+    &#34;&#34;&#34;
+    Produce an interactive Plotly plot.
+    
+    Parameters
+    ----------
+    data : rpy2.ListVector
+        Output from `equilibrate` or `affinity`.
+
+    alpha : bool or str (balance), default False
+        For speciation diagrams, plot degree of formation instead of
+        activities?
+
+    balance : str or numeric, optional
+        How to balance the transformations.
+    
+    width, height : numeric, default 600 by 520
+        Width and height of the plot.
+    
+    messages : bool, default True
+        Display messages from CHNOSZ?
+    
+    interactive : bool, default False
+        Experimental! Display an interactive plot?
+    
+    Returns
+    -------
+    Produces an interactive Plotly plot.
+    &#34;&#34;&#34;
+    
+    basis_sp = data.rx2(&#34;basis&#34;).rownames
+
+    xyvars = list(data.rx2(&#34;vars&#34;))
+    xyvals = list(data.rx2(&#34;vals&#34;))
+
+    if &#39;loga.equil&#39; not in data.names:
+        calc_type = &#34;a&#34;
+    else:
+        calc_type = &#34;e&#34;
+
+    data = equilibrate(data, balance=balance, messages=messages)
+
+    if calc_type==&#34;a&#34;:
+        out_vals = data.rx2(&#34;values&#34;)
+        out_units = &#34;A/(2.303RT)&#34;
+        df = pandas2ri.ri2py_dataframe(out_vals)
+        df[&#34;n.balance&#34;] = list(data.rx2(&#34;n.balance&#34;))
+        
+        # divide values by balance
+        df = df.apply(lambda row: row/row[&#34;n.balance&#34;], axis=1)
+        df = df.drop([&#34;n.balance&#34;], axis=1)
+        sp = list(info([int(val) for val in list(out_vals.names)], messages=False)[&#34;name&#34;])
+        
+    elif calc_type==&#34;e&#34;:
+        out_vals = data.rx2(&#34;loga.equil&#34;)
+        out_units = &#34;log a&#34;
+        df = pandas2ri.ri2py_dataframe(out_vals)
+        sp = list(info([int(val) for val in list(data.rx2(&#34;values&#34;).names)], messages=False)[&#34;name&#34;])
+    
+    df.index = sp
+    df = df.transpose()
+
+    if alpha and len(xyvars) == 1:
+        df = df.applymap(lambda x: 10**x)
+        df = df[sp].div(df[sp].sum(axis=1), axis=0)
+        
+    xvar = xyvars[0]
+    xvals = [float(val) for val in xyvals[0]]
+
+    if len(xyvars) == 1:
+        df[xvar] = xvals
+        if alpha:
+            ylabel = &#34;alpha&#34;
+        else:
+            ylabel = out_units
+        df = pd.melt(df, id_vars=xyvars, value_vars=sp)
+
+    elif len(xyvars)==2:
+        # predominance plot
+        yvar = xyvars[1]
+        yvals = [float(val) for val in xyvals[1]]
+        df[&#34;pred&#34;] = df.idxmax(axis=1)
+        df[&#34;prednames&#34;] = df[&#34;pred&#34;]
+
+        xvals_full = xvals*len(yvals)
+        yvals_full = __flatten_list([[y]*len(xvals) for y in yvals])
+        df[xvar] = xvals_full
+        df[yvar] = yvals_full
+
+    unit_dict = {&#34;P&#34;:&#34;bar&#34;, &#34;T&#34;:&#34;°C&#34;, &#34;pH&#34;:&#34;&#34;, &#34;Eh&#34;:&#34;volts&#34;, &#34;IS&#34;:&#34;mol/kg&#34;}
+
+    for s in basis_sp:
+        unit_dict[s] = &#34;logact &#34;+s
+
+    xlab = xvar+&#34;, &#34;+unit_dict[xvar]
+    if xvar == &#34;pH&#34;:
+        xlab = &#34;pH&#34;
+
+    if xvar in basis_sp:
+        xlab = unit_dict[xvar]
+
+    if len(xyvars) == 1:
+        
+        fig = px.line(df, x=xvar, y=&#34;value&#34;, color=&#39;variable&#39;, template=&#34;simple_white&#34;,
+                      width=width,  height=height,
+                      labels=dict(value=ylabel, x=__format_chemical_name(xlab)),
+                     )
+        fig.update_layout(xaxis_title=__format_chemical_name(xlab),
+                          yaxis_title=ylabel,
+                          )
+    
+        config = {&#39;displaylogo&#39;: False,
+                  &#39;modeBarButtonsToRemove&#39;: [&#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;]}
+        fig.show(config=config)
+
+    if len(xyvars) == 2:
+        mappings = {&#39;pred&#39;: {s:lab for s,lab in zip(sp,range(0,len(sp)))}}
+        df.replace(mappings, inplace=True)
+
+        data = np.array(df.pred)
+        shape = (len(xvals), len(yvals))
+        dmap = data.reshape(shape)
+
+        data = np.array(df.prednames)
+        shape = (len(xvals), len(yvals))
+        dmap_names = data.reshape(shape)
+
+        ylab = yvar+&#34;, &#34;+unit_dict[yvar]
+        if yvar in basis_sp:
+            ylab = unit_dict[yvar]
+
+        if yvar == &#34;pH&#34;:
+            yvar = &#34;pH&#34;
+
+        fig = px.imshow(dmap, width=width, height=height, aspect=&#34;auto&#34;,
+                        labels=dict(x=__format_chemical_name(xlab), y=__format_chemical_name(ylab), color=&#34;region&#34;),
+                        x=xvals, y=yvals, template=&#34;simple_white&#34;,
+                       )
+
+        fig.update(data=[{&#39;customdata&#39;: dmap_names,
+            &#39;hovertemplate&#39;: xvar+&#39;: %{x} &#39;+unit_dict[xvar]+&#39;&lt;br&gt;&#39;+yvar+&#39;: %{y} &#39;+unit_dict[yvar]+&#39;&lt;br&gt;Region: %{customdata}&lt;extra&gt;&lt;/extra&gt;&#39;}])
+
+        fig.update_traces(dict(showscale=False, 
+                               coloraxis=None, 
+                               colorscale=&#39;viridis&#39;),
+                          selector={&#39;type&#39;:&#39;heatmap&#39;})
+
+        fig.update_yaxes(autorange=True)
+
+        for s in sp:
+            if s in set(df[&#34;prednames&#34;]):
+                df_s = df.loc[df[&#34;prednames&#34;]==s,]
+                namex = df_s[xvar].mean()
+                namey = df_s[yvar].mean()
+                fig.add_annotation(x=namex, y=namey,
+                                   text=__format_chemical_name(s),
+                                   bgcolor=&#34;rgba(255, 255, 255, 0.5)&#34;,
+                                   showarrow=False)
+
+        config = {&#39;displaylogo&#39;: False,
+                  &#39;modeBarButtonsToRemove&#39;: [&#39;zoom2d&#39;, &#39;pan2d&#39;, &#39;zoomIn2d&#39;, &#39;zoomOut2d&#39;,
+                                             &#39;autoScale2d&#39;, &#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;,
+                                             &#39;hoverClosestCartesian&#39;, &#39;hoverCompareCartesian&#39;]}
+
+        fig.show(config=config)
+
+
 def _convert_to_RVector(value, force_Rvec=True):
     
     &#34;&#34;&#34;
@@ -504,7 +703,7 @@ def diagram(eout, ptype=&#39;auto&#39;, alpha=False, normalize=False,
             main=None, legend_x=None,
             add=False, plot_it=True, tplot=True,
             width=600, height=520, dpi=150,
-            messages=True):
+            messages=True, interactive=False):
     
     &#34;&#34;&#34;
     Python wrapper for the diagram() function in CHNOSZ.
@@ -667,6 +866,9 @@ def diagram(eout, ptype=&#39;auto&#39;, alpha=False, normalize=False,
     messages : bool, default True
         Display messages from CHNOSZ?
     
+    interactive : bool, default False
+        Experimental! Display an interactive plot?
+    
     Returns
     -------
     a : rpy2.ListVector
@@ -674,6 +876,13 @@ def diagram(eout, ptype=&#39;auto&#39;, alpha=False, normalize=False,
     args : dict
         Dictionary of arguments supplied to `diagram`.
     &#34;&#34;&#34;
+    
+    if interactive:
+        diagram_interactive(data=eout, balance=balance,
+                            width=width, height=height,
+                            alpha=alpha, messages=messages)
+        return
+    
     
     args = {&#39;eout&#39;:eout, &#39;ptype&#39;:ptype, &#39;alpha&#39;:alpha, &#39;normalize&#39;:normalize,
             &#39;as.residue&#39;:as_residue, &#39;ylog&#39;:ylog, &#39;fill.NA&#39;:fill_NA, &#39;format.names&#39;:format_names,
@@ -1745,7 +1954,7 @@ elemental composition.</dd>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.diagram"><code class="name flex">
-<span>def <span class="ident">diagram</span></span>(<span>eout, ptype='auto', alpha=False, normalize=False, as_residue=False, balance=None, groups=None, xrange=None, mar=None, yline=None, side=[1, 2, 3, 4], ylog=True, xlim=None, ylim=None, xlab=None, ylab=None, cex=None, cex_names=None, cex_axis=None, lty=None, lwd=None, dotted=None, spline_method=None, contour_method=None, levels=None, col=None, col_names=None, fill=None, fill_NA='gray80', limit_water=None, names=None, format_names=True, bold=False, italic=False, font=None, family=None, adj=0.5, dx=0, dy=0, srt=0, min_area=0, main=None, legend_x=None, add=False, plot_it=True, tplot=True, width=600, height=520, dpi=150, messages=True)</span>
+<span>def <span class="ident">diagram</span></span>(<span>eout, ptype='auto', alpha=False, normalize=False, as_residue=False, balance=None, groups=None, xrange=None, mar=None, yline=None, side=[1, 2, 3, 4], ylog=True, xlim=None, ylim=None, xlab=None, ylab=None, cex=None, cex_names=None, cex_axis=None, lty=None, lwd=None, dotted=None, spline_method=None, contour_method=None, levels=None, col=None, col_names=None, fill=None, fill_NA='gray80', limit_water=None, names=None, format_names=True, bold=False, italic=False, font=None, family=None, adj=0.5, dx=0, dy=0, srt=0, min_area=0, main=None, legend_x=None, add=False, plot_it=True, tplot=True, width=600, height=520, dpi=150, messages=True, interactive=False)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Python wrapper for the diagram() function in CHNOSZ.
@@ -1858,6 +2067,8 @@ of the total plot area.</dd>
 <dd>Resolution of the plot.</dd>
 <dt><strong><code>messages</code></strong> :&ensp;<code>bool</code>, default <code>True</code></dt>
 <dd>Display messages from CHNOSZ?</dd>
+<dt><strong><code>interactive</code></strong> :&ensp;<code>bool</code>, default <code>False</code></dt>
+<dd>Experimental! Display an interactive plot?</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
@@ -1885,7 +2096,7 @@ of the total plot area.</dd>
             main=None, legend_x=None,
             add=False, plot_it=True, tplot=True,
             width=600, height=520, dpi=150,
-            messages=True):
+            messages=True, interactive=False):
     
     &#34;&#34;&#34;
     Python wrapper for the diagram() function in CHNOSZ.
@@ -2048,6 +2259,9 @@ of the total plot area.</dd>
     messages : bool, default True
         Display messages from CHNOSZ?
     
+    interactive : bool, default False
+        Experimental! Display an interactive plot?
+    
     Returns
     -------
     a : rpy2.ListVector
@@ -2055,6 +2269,13 @@ of the total plot area.</dd>
     args : dict
         Dictionary of arguments supplied to `diagram`.
     &#34;&#34;&#34;
+    
+    if interactive:
+        diagram_interactive(data=eout, balance=balance,
+                            width=width, height=height,
+                            alpha=alpha, messages=messages)
+        return
+    
     
     args = {&#39;eout&#39;:eout, &#39;ptype&#39;:ptype, &#39;alpha&#39;:alpha, &#39;normalize&#39;:normalize,
             &#39;as.residue&#39;:as_residue, &#39;ylog&#39;:ylog, &#39;fill.NA&#39;:fill_NA, &#39;format.names&#39;:format_names,
@@ -2120,6 +2341,201 @@ of the total plot area.</dd>
             print(warning.message)
     
     return a, args</code></pre>
+</details>
+</dd>
+<dt id="pyCHNOSZ.fun.diagram_interactive"><code class="name flex">
+<span>def <span class="ident">diagram_interactive</span></span>(<span>data, balance=None, width=600, height=520, alpha=False, messages=True)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Produce an interactive Plotly plot.</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>data</code></strong> :&ensp;<code>rpy2.ListVector</code></dt>
+<dd>Output from <code><a title="pyCHNOSZ.fun.equilibrate" href="#pyCHNOSZ.fun.equilibrate">equilibrate()</a></code> or <code><a title="pyCHNOSZ.fun.affinity" href="#pyCHNOSZ.fun.affinity">affinity()</a></code>.</dd>
+<dt><strong><code>alpha</code></strong> :&ensp;<code>bool</code> or <code>str (balance)</code>, default <code>False</code></dt>
+<dd>For speciation diagrams, plot degree of formation instead of
+activities?</dd>
+<dt><strong><code>balance</code></strong> :&ensp;<code>str</code> or <code>numeric</code>, optional</dt>
+<dd>How to balance the transformations.</dd>
+<dt><strong><code>width</code></strong>, <strong><code>height</code></strong> :&ensp;<code>numeric</code>, default <code>600 by 520</code></dt>
+<dd>Width and height of the plot.</dd>
+<dt><strong><code>messages</code></strong> :&ensp;<code>bool</code>, default <code>True</code></dt>
+<dd>Display messages from CHNOSZ?</dd>
+<dt><strong><code>interactive</code></strong> :&ensp;<code>bool</code>, default <code>False</code></dt>
+<dd>Experimental! Display an interactive plot?</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Produces an interactive Plotly plot.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def diagram_interactive(data, balance=None, width=600, height=520, alpha=False, messages=True):
+    
+    &#34;&#34;&#34;
+    Produce an interactive Plotly plot.
+    
+    Parameters
+    ----------
+    data : rpy2.ListVector
+        Output from `equilibrate` or `affinity`.
+
+    alpha : bool or str (balance), default False
+        For speciation diagrams, plot degree of formation instead of
+        activities?
+
+    balance : str or numeric, optional
+        How to balance the transformations.
+    
+    width, height : numeric, default 600 by 520
+        Width and height of the plot.
+    
+    messages : bool, default True
+        Display messages from CHNOSZ?
+    
+    interactive : bool, default False
+        Experimental! Display an interactive plot?
+    
+    Returns
+    -------
+    Produces an interactive Plotly plot.
+    &#34;&#34;&#34;
+    
+    basis_sp = data.rx2(&#34;basis&#34;).rownames
+
+    xyvars = list(data.rx2(&#34;vars&#34;))
+    xyvals = list(data.rx2(&#34;vals&#34;))
+
+    if &#39;loga.equil&#39; not in data.names:
+        calc_type = &#34;a&#34;
+    else:
+        calc_type = &#34;e&#34;
+
+    data = equilibrate(data, balance=balance, messages=messages)
+
+    if calc_type==&#34;a&#34;:
+        out_vals = data.rx2(&#34;values&#34;)
+        out_units = &#34;A/(2.303RT)&#34;
+        df = pandas2ri.ri2py_dataframe(out_vals)
+        df[&#34;n.balance&#34;] = list(data.rx2(&#34;n.balance&#34;))
+        
+        # divide values by balance
+        df = df.apply(lambda row: row/row[&#34;n.balance&#34;], axis=1)
+        df = df.drop([&#34;n.balance&#34;], axis=1)
+        sp = list(info([int(val) for val in list(out_vals.names)], messages=False)[&#34;name&#34;])
+        
+    elif calc_type==&#34;e&#34;:
+        out_vals = data.rx2(&#34;loga.equil&#34;)
+        out_units = &#34;log a&#34;
+        df = pandas2ri.ri2py_dataframe(out_vals)
+        sp = list(info([int(val) for val in list(data.rx2(&#34;values&#34;).names)], messages=False)[&#34;name&#34;])
+    
+    df.index = sp
+    df = df.transpose()
+
+    if alpha and len(xyvars) == 1:
+        df = df.applymap(lambda x: 10**x)
+        df = df[sp].div(df[sp].sum(axis=1), axis=0)
+        
+    xvar = xyvars[0]
+    xvals = [float(val) for val in xyvals[0]]
+
+    if len(xyvars) == 1:
+        df[xvar] = xvals
+        if alpha:
+            ylabel = &#34;alpha&#34;
+        else:
+            ylabel = out_units
+        df = pd.melt(df, id_vars=xyvars, value_vars=sp)
+
+    elif len(xyvars)==2:
+        # predominance plot
+        yvar = xyvars[1]
+        yvals = [float(val) for val in xyvals[1]]
+        df[&#34;pred&#34;] = df.idxmax(axis=1)
+        df[&#34;prednames&#34;] = df[&#34;pred&#34;]
+
+        xvals_full = xvals*len(yvals)
+        yvals_full = __flatten_list([[y]*len(xvals) for y in yvals])
+        df[xvar] = xvals_full
+        df[yvar] = yvals_full
+
+    unit_dict = {&#34;P&#34;:&#34;bar&#34;, &#34;T&#34;:&#34;°C&#34;, &#34;pH&#34;:&#34;&#34;, &#34;Eh&#34;:&#34;volts&#34;, &#34;IS&#34;:&#34;mol/kg&#34;}
+
+    for s in basis_sp:
+        unit_dict[s] = &#34;logact &#34;+s
+
+    xlab = xvar+&#34;, &#34;+unit_dict[xvar]
+    if xvar == &#34;pH&#34;:
+        xlab = &#34;pH&#34;
+
+    if xvar in basis_sp:
+        xlab = unit_dict[xvar]
+
+    if len(xyvars) == 1:
+        
+        fig = px.line(df, x=xvar, y=&#34;value&#34;, color=&#39;variable&#39;, template=&#34;simple_white&#34;,
+                      width=width,  height=height,
+                      labels=dict(value=ylabel, x=__format_chemical_name(xlab)),
+                     )
+        fig.update_layout(xaxis_title=__format_chemical_name(xlab),
+                          yaxis_title=ylabel,
+                          )
+    
+        config = {&#39;displaylogo&#39;: False,
+                  &#39;modeBarButtonsToRemove&#39;: [&#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;]}
+        fig.show(config=config)
+
+    if len(xyvars) == 2:
+        mappings = {&#39;pred&#39;: {s:lab for s,lab in zip(sp,range(0,len(sp)))}}
+        df.replace(mappings, inplace=True)
+
+        data = np.array(df.pred)
+        shape = (len(xvals), len(yvals))
+        dmap = data.reshape(shape)
+
+        data = np.array(df.prednames)
+        shape = (len(xvals), len(yvals))
+        dmap_names = data.reshape(shape)
+
+        ylab = yvar+&#34;, &#34;+unit_dict[yvar]
+        if yvar in basis_sp:
+            ylab = unit_dict[yvar]
+
+        if yvar == &#34;pH&#34;:
+            yvar = &#34;pH&#34;
+
+        fig = px.imshow(dmap, width=width, height=height, aspect=&#34;auto&#34;,
+                        labels=dict(x=__format_chemical_name(xlab), y=__format_chemical_name(ylab), color=&#34;region&#34;),
+                        x=xvals, y=yvals, template=&#34;simple_white&#34;,
+                       )
+
+        fig.update(data=[{&#39;customdata&#39;: dmap_names,
+            &#39;hovertemplate&#39;: xvar+&#39;: %{x} &#39;+unit_dict[xvar]+&#39;&lt;br&gt;&#39;+yvar+&#39;: %{y} &#39;+unit_dict[yvar]+&#39;&lt;br&gt;Region: %{customdata}&lt;extra&gt;&lt;/extra&gt;&#39;}])
+
+        fig.update_traces(dict(showscale=False, 
+                               coloraxis=None, 
+                               colorscale=&#39;viridis&#39;),
+                          selector={&#39;type&#39;:&#39;heatmap&#39;})
+
+        fig.update_yaxes(autorange=True)
+
+        for s in sp:
+            if s in set(df[&#34;prednames&#34;]):
+                df_s = df.loc[df[&#34;prednames&#34;]==s,]
+                namex = df_s[xvar].mean()
+                namey = df_s[yvar].mean()
+                fig.add_annotation(x=namex, y=namey,
+                                   text=__format_chemical_name(s),
+                                   bgcolor=&#34;rgba(255, 255, 255, 0.5)&#34;,
+                                   showarrow=False)
+
+        config = {&#39;displaylogo&#39;: False,
+                  &#39;modeBarButtonsToRemove&#39;: [&#39;zoom2d&#39;, &#39;pan2d&#39;, &#39;zoomIn2d&#39;, &#39;zoomOut2d&#39;,
+                                             &#39;autoScale2d&#39;, &#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;,
+                                             &#39;hoverClosestCartesian&#39;, &#39;hoverCompareCartesian&#39;]}
+
+        fig.show(config=config)</code></pre>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.entropy"><code class="name flex">
@@ -3378,6 +3794,7 @@ define the species of interest.</dd>
 <li><code><a title="pyCHNOSZ.fun.affinity" href="#pyCHNOSZ.fun.affinity">affinity</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.basis" href="#pyCHNOSZ.fun.basis">basis</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.diagram" href="#pyCHNOSZ.fun.diagram">diagram</a></code></li>
+<li><code><a title="pyCHNOSZ.fun.diagram_interactive" href="#pyCHNOSZ.fun.diagram_interactive">diagram_interactive</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.entropy" href="#pyCHNOSZ.fun.entropy">entropy</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.equilibrate" href="#pyCHNOSZ.fun.equilibrate">equilibrate</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.info" href="#pyCHNOSZ.fun.info">info</a></code></li>

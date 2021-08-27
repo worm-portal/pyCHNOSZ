@@ -1,1 +1,1 @@
-from .fun import subcrt, info, add_OBIGT, mod_OBIGT, reset, basis, species, affinity, diagram, equilibrate, seq2aa, add_protein, entropy, zc, mass, makeup, thermo, water
+from .fun import subcrt, info, add_OBIGT, mod_OBIGT, reset, basis, species, affinity, equilibrate, diagram, seq2aa, add_protein, entropy, zc, mass, makeup, thermo, water, diagram_interactive
