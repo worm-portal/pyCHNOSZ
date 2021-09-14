@@ -6,6 +6,9 @@ import pandas as pd
 import numpy as np
 import re
 import plotly.express as px
+import plotly.graph_objects as go
+import copy
+import statistics
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -63,7 +66,7 @@ def __flatten_list(_2d_list):
     return flat_list
 
 
-def __format_chemical_name(name):
+def html_chemname_format(name):
     p = re.compile(r'(?P<sp>\+|-\d+?$)')
     name = p.sub(r'<sup>\g<sp></sup>', name)
     
@@ -77,7 +80,416 @@ def __format_chemical_name(name):
     return(name)
 
 
-def diagram_interactive(data, balance=None, width=600, height=520, alpha=False, messages=True):
+def __seq(start, end, by=None, length_out=None):
+    len_provided = True if (length_out is not None) else False
+    by_provided = True if (by is not None) else False
+    if (not by_provided) & (not len_provided):
+        raise ValueError('At least by or n_points must be provided')
+    width = end - start
+    eps = pow(10.0, -14)
+    if by_provided:
+        if (abs(by) < eps):
+            raise ValueError('by must be non-zero.')
+        absby = abs(by)
+        if absby - width < eps: 
+            length_out = int(width / absby)
+        else: 
+            # by is too great, we assume by is actually length_out
+            length_out = int(by)
+            by = width / (by - 1)
+    else:
+        length_out = int(length_out)
+        by = width / (length_out - 1) 
+    out = [float(start)]*length_out
+    for i in range(1, length_out):
+        out[i] += by * i
+    if abs(start + by * length_out - end) < eps:
+        out.append(end)
+    return out
+
+
+def animation(basis_args={}, species_args={}, affinity_args={},
+              equilibrate_args=None, diagram_args={},
+              anim_var="T", anim_range=[0, 350, 8],
+              messages=False):
+    
+    """
+    Produce an animated interactive affinity, activity, or predominance diagram.
+    
+    Parameters
+    ----------
+    basis_args : dict
+        Dictionary of options for defining basis species (see `basis`) in the
+        animated diagram.
+        Example: basis_args={'species':['CO2', 'O2', 'H2O', 'H+']}
+
+    basis_args : dict
+        Dictionary of options for defining species (see `species`) in the
+        animated diagram.
+        Example: species_args={'species':['CO2', 'HCO3-', 'CO3-2']}
+
+    affinity_args : dict
+        Dictionary of options for defining the affinity calculation (see
+        `affinity`).
+        Example: affinity_args={"pH":[2, 12, 100]}
+        Example: affinity_args={"pH":[2, 12, 100], "P":[2000, 4000, 100]}
+    
+    equilibrate_args : dict or None, default None
+        Dictionary of options for defining equilibration calculation
+        (see `equilibrate`). If None, plots output from `affinity`.
+        Example: equilibrate_args={"balance":1}
+    
+    diagram_args : dict
+        Dictionary of options for diagramming (see `diagram`). Diagram option
+        `interactive` is set to True.
+        Example: diagram_args={"alpha":True}
+    
+    anim_var : str, default "T"
+        Variable that changes with each frame of animation.
+    
+    anim_range : list of numeric, default [0, 350, 8]
+        The first two numbers in the list are the starting and ending
+        values for `anim_var`. The third number in the list is the desired
+        number of animation frames.
+    
+    messages : bool, default True
+        Display messages from CHNOSZ?
+    
+    Returns
+    -------
+    An interactive animated plot.
+    """
+    
+    # cap number of frames in animation. Remove limitation after more testing.
+    if isinstance(anim_range, list):
+        if len(anim_range) == 3:
+            if anim_range[2] > 30:
+                raise Exception("anim_range is limited to 30 frames.")
+        else:
+            raise Exception("anim_range must be a list with three values: starting "
+                            "value of anim_var, stopping value, and number of "
+                            "frames in the animation")
+    else:
+        raise Exception("anim_range must be a list with three values: starting "
+                        "value of anim_var, stopping value, and number of "
+                        "frames in the animation")
+    
+    if isinstance(basis_args, dict):
+        if "species" not in basis_args.keys():
+            raise Exception("basis_args needs a list of basis species for 'species'. "
+                            "Example: basis_args={'species':['CO2', 'O2', 'H2O', 'H+']}")
+    else:
+        raise Exception("basis_args needs to be a Python dictionary with a key "
+                        "called 'species' (additional keys are optional). "
+                        "Example: basis_args={'species':['CO2', 'O2', 'H2O', 'H+']}")
+    
+    if isinstance(species_args, dict):
+        if "species" not in species_args.keys():
+            raise Exception("species_args needs a list of species for 'species'. "
+                            "Example: species_args={'species':['CO2', 'HCO3-', 'CO3-2']}")
+    else:
+        raise Exception("species_args needs to be a Python dictionary with a key "
+                        "called 'species' (additional keys are optional). "
+                        "Example: species_args={'species':['CO2', 'HCO3-', 'CO3-2']}")
+    
+    basis_sp = basis_args["species"]
+    sp = species_args["species"]
+    basis(**basis_args)
+    species(**species_args)
+
+    dfs = []
+    dmaps = []
+    dmaps_names = []
+    
+    if len(anim_range) == 2:
+        anim_res = 8
+        anim_range = anim_range + [anim_res]
+    elif len(anim_range) == 3:
+        anim_res = anim_range[2]
+        anim_range = [anim_range[0], anim_range[1]]
+    
+    zvals = __seq(anim_range[0], anim_range[1], length_out=anim_res)
+        
+    if "messages" not in affinity_args.keys():
+        affinity_args["messages"] = messages
+    if "messages" not in diagram_args.keys():
+        diagram_args["messages"] = messages
+    if "plot_it" not in diagram_args.keys():
+        diagram_args["plot_it"] = False
+    diagram_args["interactive"] = True
+    
+    for z in zvals:
+
+        affinity_args[anim_var] = z
+
+        aeout = affinity(**affinity_args)
+        if equilibrate_args != None:
+            equilibrate_args["aout"] = aeout
+            if "messages" not in equilibrate_args.keys():
+                equilibrate_args["messages"] = messages
+            aeout = equilibrate(**equilibrate_args)
+        
+        aeout_args = aeout.rx2("args")
+        xvar = aeout_args.names[0]
+        xrange = list(aeout_args[0])
+
+        res_default = 256 # default affinity resolution
+        if len(xrange) == 3:
+            xres = int(xrange[2])
+        else:
+            xres = res_default
+        
+        diagram_args["eout"] = aeout
+        
+        df = diagram(**diagram_args)
+        
+        df[anim_var] = z
+        dfs.append(df)
+
+        if 'pred' not in df.columns:
+            # affinity/activity plot
+            is_predom_plot = False
+            
+        else:
+            # predominance plot
+            is_predom_plot = True
+            yvar = aeout_args.names[1]
+            yrange = list(aeout_args[1])
+            if len(yrange) == 3:
+                yres = int(yrange[2])
+            else:
+                yres = res_default
+
+            data = np.array(df.pred)
+            shape = (xres, yres)
+            dmap = data.reshape(shape)
+            dmaps.append(dmap)
+
+            data = np.array(df.prednames)
+            shape = (xres, yres)
+            dmap_names = data.reshape(shape)
+            dmaps_names.append(dmap_names)
+        
+    xvals = __seq(xrange[0], xrange[1], length_out=xres)
+    
+    if not is_predom_plot:
+
+        if 'loga.equil' not in aeout.names:
+            yvar = "A/(2.303RT)"
+        else:
+            yvar = "log a"
+        if "alpha" in diagram_args.keys():
+            if diagram_args["alpha"]:
+                yvar = "alpha"
+        
+        df_c = pd.concat(dfs)
+
+        fig = px.line(df_c, x=xvar, y="value", color='variable', template="simple_white",
+                      width=500,  height=400, animation_frame=anim_var,
+                      labels=dict(value=yvar, x=xvar),
+                     )
+
+        config = {'displaylogo': False,
+                  'modeBarButtonsToRemove': ['resetScale2d', 'toggleSpikelines']}
+
+        fig.show(config=config)
+        return
+    
+    else:
+        yvals = __seq(yrange[0], yrange[1], length_out=yres)
+
+    unit_dict = {"P":"bar", "T":"°C", "pH":"", "Eh":"volts", "IS":"mol/kg"}
+
+    for s in basis_sp:
+        unit_dict[s] = "logact "+s
+
+    xlab = xvar+", "+unit_dict[xvar]
+    if xvar in basis_sp:
+        xlab = unit_dict[xvar]
+    if xvar == "pH":
+        xlab = "pH"
+    
+    if is_predom_plot:
+        ylab = yvar+", "+unit_dict[yvar]
+        if yvar in basis_sp:
+            ylab = unit_dict[yvar]
+        if yvar == "pH":
+            yvar = "pH"
+        
+    frames = []
+    slider_steps = []
+    annotations = []
+    cst_data = []
+    heatmaps = []
+    # i is a frame in the animation
+    for i in range(0, len(zvals)):
+
+        annotations_i = []
+        for s in sp:
+            if s in set(dfs[i]["prednames"]):
+                # if an annotation should appear, create one for this frame
+                df_s = dfs[i].loc[dfs[i]["prednames"]==s,]
+                namex = df_s[xvar].mean()
+                namey = df_s[yvar].mean()
+                a = go.layout.Annotation(
+                    x=namex,
+                    y=namey,
+                    xref="x",
+                    yref="y",
+                    text=html_chemname_format(s),
+                    bgcolor="rgba(255, 255, 255, 0.5)",
+                    showarrow=False,
+                    )
+            else:
+                # if an annotation shouldn't appear, make an invisible annotation
+                # (workaround for a plotly bug where annotations won't clear in an animation)
+                namex = statistics.mean(xvals)
+                namey = statistics.mean(yvals)
+                a = go.layout.Annotation(
+                    x=namex,
+                    y=namey,
+                    xref="x",
+                    yref="y",
+                    text="",
+                    bgcolor="rgba(255, 255, 255, 0)",
+                    showarrow=False,
+                    )
+            annotations_i.append(a)
+        annotations.append(annotations_i)
+
+        heatmaps_i = go.Heatmap(z=dmaps[i], x=xvals, y=yvals, zmin=0, zmax=len(sp)-1, # is this zmax valid? Double check.
+                                customdata=dmaps_names[i],
+                                hovertemplate=xvar+': %{x} '+unit_dict[xvar]+'<br>'+yvar+': %{y} '+unit_dict[yvar]+'<br>Region: %{customdata}<extra></extra>')
+
+        heatmaps.append(heatmaps_i)
+        
+        frame = go.Frame(data=[heatmaps_i],
+                         name=str(i),
+                         layout=go.Layout(annotations=annotations_i,
+                                          coloraxis={'colorscale':["green", "blue", "red", "yellow", "orange", "brown"]}))
+
+        frames.append(frame)
+
+        slider_step = dict(
+            method='animate',
+            label=zvals[i],
+            value=i,
+            args=[
+                [i],
+                dict(
+                    frame=dict(duration=300, redraw=True),
+                    mode='immediate',
+                    transition=dict(duration=0)
+                )
+            ]
+        )
+
+        slider_steps.append(slider_step)
+
+    fig = go.Figure(
+        data = heatmaps[0],
+        layout=go.Layout(
+    #         title="Frame 0",
+            title_x=0.5,
+            width=500, height=500,
+            annotations=annotations[0],
+            sliders=[dict(
+                active=0,
+                yanchor='top',
+                xanchor='left',
+                currentvalue=dict(
+                    font=dict(size=12),
+                    prefix='{}: '.format(anim_var),
+                    suffix=' '+unit_dict[anim_var],
+                    visible=True,
+                    xanchor='right'
+                ),
+                transition=dict(duration=0, easing='cubic-in-out'),
+                pad=dict(b=10, t=50),
+                len=0.9,
+                x=0.1,
+                y=0,
+                steps=slider_steps
+            )],
+            updatemenus=[dict(
+                type="buttons",
+                buttons=[dict(label="Play",
+                              method="animate",
+                              args=[None, {"fromcurrent":True}]),
+                        dict(label="Pause",
+                             method="animate",
+                             args=[[None],
+                                   {"frame": {"duration": 0, "redraw": True},
+                                    "mode": "immediate",
+                                    "transition": {"duration": 0}}],
+                             )],
+                direction="left",
+                pad={"r": 10, "t": 87},
+                showactive=False,
+                x=0.1,
+                xanchor="right",
+                y=0,
+                yanchor="top",
+            )]
+        ),
+        frames=frames
+
+    )
+
+    fig.update_traces(dict(showscale=False,
+                           colorscale='viridis'),
+                      selector={'type':'heatmap'})
+
+
+
+    fig.update_layout(
+        xaxis_title=html_chemname_format(xlab),
+        yaxis_title=html_chemname_format(ylab),
+        margin={"t": 40, "r":60},
+#         updatemenus = [
+#         {
+#             "buttons": [
+#                 {
+#                     "args": [None, {"frame": {"duration": 500, "redraw": False},
+#                                     "fromcurrent": True, "transition": {"duration": 300,
+#                                                                         "easing": "quadratic-in-out"}}],
+#                     "label": "Play",
+#                     "method": "animate"
+#                 },
+#                 {
+#                     "args": [[None], {"frame": {"duration": 0, "redraw": False},
+#                                       "mode": "immediate",
+#                                       "transition": {"duration": 0}}],
+#                     "label": "Pause",
+#                     "method": "animate"
+#                 }
+#             ],
+#             "direction": "left",
+#             "pad": {"r": 10, "t": 87},
+#             "showactive": False,
+#             "type": "buttons",
+#             "x": 0.1,
+#             "xanchor": "right",
+#             "y": 0,
+#             "yanchor": "top"
+#         }
+#     ])
+    )
+
+    config = {'displaylogo': False,
+              'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'zoomIn2d', 'zoomOut2d',
+                                         'autoScale2d', 'resetScale2d', 'toggleSpikelines',
+                                         'hoverClosestCartesian', 'hoverCompareCartesian']}
+
+    fig.show(config=config)
+
+
+
+def diagram_interactive(data, title=None,
+                        annotation=None, annotation_coords=[0, 0],
+                        balance=None, xlab=None, ylab=None, colormap="viridis",
+                        width=600, height=520, alpha=False, messages=True,
+                        plot_it=True):
     
     """
     Produce an interactive Plotly plot.
@@ -86,26 +498,39 @@ def diagram_interactive(data, balance=None, width=600, height=520, alpha=False, 
     ----------
     data : rpy2.ListVector
         Output from `equilibrate` or `affinity`.
-
-    alpha : bool or str (balance), default False
-        For speciation diagrams, plot degree of formation instead of
-        activities?
-
+    
+    title : str, optional
+        Title of the plot.
+    
+    annotation : str, optional
+        Annotation to add to the plot.
+    
+    annotation_coords : list of numeric, default [0, 0], optional
+        Coordinates of annotation, where 0,0 is bottom left and 1,1 is top
+        right.
+        
     balance : str or numeric, optional
         How to balance the transformations.
     
+    xlab, ylab : str
+        Custom x and y axes labels.
+    
     width, height : numeric, default 600 by 520
         Width and height of the plot.
+        
+    alpha : bool or str (balance), default False
+        For speciation diagrams, plot degree of formation instead of
+        activities?
     
     messages : bool, default True
         Display messages from CHNOSZ?
     
-    interactive : bool, default False
-        Experimental! Display an interactive plot?
+    plot_it : bool, default True
+        Show the plot?
     
     Returns
     -------
-    Produces an interactive Plotly plot.
+    An interactive plot.
     """
     
     basis_sp = data.rx2("basis").rownames
@@ -149,10 +574,12 @@ def diagram_interactive(data, balance=None, width=600, height=520, alpha=False, 
 
     if len(xyvars) == 1:
         df[xvar] = xvals
-        if alpha:
-            ylabel = "alpha"
-        else:
-            ylabel = out_units
+        if not isinstance(ylab, str):
+            if alpha:
+                ylab = "alpha"
+            else:
+                ylab = out_units
+            ylab = html_chemname_format(ylab)
         df = pd.melt(df, id_vars=xyvars, value_vars=sp)
 
     elif len(xyvars)==2:
@@ -171,27 +598,31 @@ def diagram_interactive(data, balance=None, width=600, height=520, alpha=False, 
 
     for s in basis_sp:
         unit_dict[s] = "logact "+s
-
-    xlab = xvar+", "+unit_dict[xvar]
-    if xvar == "pH":
-        xlab = "pH"
-
-    if xvar in basis_sp:
-        xlab = unit_dict[xvar]
+    
+    if not isinstance(xlab, str):
+        xlab = xvar+", "+unit_dict[xvar]
+        if xvar == "pH":
+            xlab = "pH"
+        if xvar in basis_sp:
+            xlab = unit_dict[xvar]
+        xlab = html_chemname_format(xlab)
 
     if len(xyvars) == 1:
         
         fig = px.line(df, x=xvar, y="value", color='variable', template="simple_white",
                       width=width,  height=height,
-                      labels=dict(value=ylabel, x=__format_chemical_name(xlab)),
+                      labels=dict(value=ylab, x=xlab),
                      )
-        fig.update_layout(xaxis_title=__format_chemical_name(xlab),
-                          yaxis_title=ylabel,
+        
+        fig.update_layout(xaxis_title=xlab,
+                          yaxis_title=ylab,
                           )
+        
+        if isinstance(title, str):
+            fig.update_layout(title={'text':title, 'x':0.5, 'xanchor':'center'})
     
         config = {'displaylogo': False,
                   'modeBarButtonsToRemove': ['resetScale2d', 'toggleSpikelines']}
-        fig.show(config=config)
 
     if len(xyvars) == 2:
         mappings = {'pred': {s:lab for s,lab in zip(sp,range(0,len(sp)))}}
@@ -204,28 +635,33 @@ def diagram_interactive(data, balance=None, width=600, height=520, alpha=False, 
         data = np.array(df.prednames)
         shape = (len(xvals), len(yvals))
         dmap_names = data.reshape(shape)
+        
+        if not isinstance(ylab, str):
+            ylab = yvar+", "+unit_dict[yvar]
+            if yvar in basis_sp:
+                ylab = unit_dict[yvar]
 
-        ylab = yvar+", "+unit_dict[yvar]
-        if yvar in basis_sp:
-            ylab = unit_dict[yvar]
-
-        if yvar == "pH":
-            yvar = "pH"
-
+            if yvar == "pH":
+                ylab = "pH"
+            ylab = html_chemname_format(ylab)
+        
         fig = px.imshow(dmap, width=width, height=height, aspect="auto",
-                        labels=dict(x=__format_chemical_name(xlab), y=__format_chemical_name(ylab), color="region"),
+                        labels=dict(x=xlab, y=ylab, color="region"),
                         x=xvals, y=yvals, template="simple_white",
                        )
 
         fig.update(data=[{'customdata': dmap_names,
-            'hovertemplate': xvar+': %{x} '+unit_dict[xvar]+'<br>'+yvar+': %{y} '+unit_dict[yvar]+'<br>Region: %{customdata}<extra></extra>'}])
+            'hovertemplate': xlab+': %{x}<br>'+ylab+': %{y}<br>Region: %{customdata}<extra></extra>'}])
 
         fig.update_traces(dict(showscale=False, 
                                coloraxis=None, 
-                               colorscale='viridis'),
+                               colorscale=colormap),
                           selector={'type':'heatmap'})
 
         fig.update_yaxes(autorange=True)
+        
+        if isinstance(title, str):
+            fig.update_layout(title={'text':title, 'x':0.5, 'xanchor':'center'})
 
         for s in sp:
             if s in set(df["prednames"]):
@@ -233,7 +669,7 @@ def diagram_interactive(data, balance=None, width=600, height=520, alpha=False, 
                 namex = df_s[xvar].mean()
                 namey = df_s[yvar].mean()
                 fig.add_annotation(x=namex, y=namey,
-                                   text=__format_chemical_name(s),
+                                   text=html_chemname_format(s),
                                    bgcolor="rgba(255, 255, 255, 0.5)",
                                    showarrow=False)
 
@@ -241,8 +677,21 @@ def diagram_interactive(data, balance=None, width=600, height=520, alpha=False, 
                   'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'zoomIn2d', 'zoomOut2d',
                                              'autoScale2d', 'resetScale2d', 'toggleSpikelines',
                                              'hoverClosestCartesian', 'hoverCompareCartesian']}
-
+        
+    if isinstance(annotation, str):
+        fig.add_annotation(
+            x=annotation_coords[0],
+            y=annotation_coords[1],
+            text=annotation,
+            showarrow=False,
+            xref="paper",
+            yref="paper",
+            bgcolor="rgba(255, 255, 255, 0.5)")
+        
+    if plot_it:
         fig.show(config=config)
+    
+    return df
 
 
 def _convert_to_RVector(value, force_Rvec=True):
@@ -675,7 +1124,8 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
             main=None, legend_x=None,
             add=False, plot_it=True, tplot=True,
             width=600, height=520, dpi=150,
-            messages=True, interactive=False):
+            messages=True, interactive=False,
+            annotation=None, annotation_coords=[0,0]):
     
     """
     Python wrapper for the diagram() function in CHNOSZ.
@@ -840,6 +1290,14 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
     
     interactive : bool, default False
         Experimental! Display an interactive plot?
+
+    annotation : str, optional
+        Annotation to add to the plot. Interactive plots only (`interactive`
+        is set to True).
+    
+    annotation_coords : list of numeric, default [0, 0], optional
+        Coordinates of annotation, where 0,0 is bottom left and 1,1 is top
+        right. Interactive plots only (`interactive` is set to True).
     
     Returns
     -------
@@ -850,10 +1308,15 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
     """
     
     if interactive:
-        diagram_interactive(data=eout, balance=balance,
-                            width=width, height=height,
-                            alpha=alpha, messages=messages)
-        return
+        df = diagram_interactive(data=eout, title=main, annotation=annotation,
+                                 annotation_coords=annotation_coords,
+                                 balance=balance,
+                                 xlab=xlab, ylab=ylab,
+                                 colormap=fill,
+                                 width=width, height=height,
+                                 alpha=alpha, plot_it=plot_it,
+                                 messages=messages)
+        return df
     
     
     args = {'eout':eout, 'ptype':ptype, 'alpha':alpha, 'normalize':normalize,
