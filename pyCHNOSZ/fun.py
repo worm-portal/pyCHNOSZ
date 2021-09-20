@@ -9,6 +9,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import copy
 import statistics
+import pkg_resources
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -2029,3 +2030,80 @@ class thermo(object):
             
     def __getitem__(self, item):
          return getattr(self, item)
+
+        
+def unicurve(logK, species, phase, stoich, pressures=1, temperatures=25,
+             minT=0.1, maxT=100, minP=1, maxP=500,
+             solve="T", width=600, height=520, dpi=90, plot_it=True,
+             messages=True, show=True):
+    
+    species = _convert_to_RVector(species, force_Rvec=False)
+    phase = _convert_to_RVector(phase, force_Rvec=False)
+    stoich = _convert_to_RVector(stoich, force_Rvec=False)
+    pressures = _convert_to_RVector(pressures, force_Rvec=False)
+    temperatures = _convert_to_RVector(temperatures, force_Rvec=False)
+    
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        r_univariant = pkg_resources.resource_string(
+            __name__, 'univariant.r').decode("utf-8")
+        ro.r(r_univariant)
+        if solve=="T":
+            a = ro.r.uc_solveT(logK=logK,
+                               species=species,
+                               phase=phase,
+                               stoich=stoich,
+                               pressures=pressures,
+                               minT=minT,
+                               maxT=maxT)
+            with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
+                ro.r.create_output_plot_T(logK=logK,
+                                          species=species,
+                                          phase=phase,
+                                          stoich=stoich,
+                                          pressures=pressures,
+                                          minT=minT,
+                                          maxT=maxT)
+        elif solve=="P":
+            a = ro.r.uc_solveP(logK=logK,
+                               species=species,
+                               phase=phase,
+                               stoich=stoich,
+                               temperatures=temperatures,
+                               minP=minP,
+                               maxP=maxP)
+            with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
+                ro.r.create_output_plot_P(logK=logK,
+                                          species=species,
+                                          phase=phase,
+                                          stoich=stoich,
+                                          temperatures=temperatures,
+                                          minP=minP,
+                                          maxP=maxP)
+    if messages:
+        for warning in w:
+            print(warning.message)
+
+    if len(a) == 3:
+        warn = a[2][0] # subcrt's list includes warnings only if they appear
+    else:
+        warn = None
+    
+    out_dict = {"reaction":pandas2ri.ri2py_dataframe(a[0]),
+                "out":pandas2ri.ri2py_dataframe(a[1])} # the extra [0] is important
+        
+    if warn != None:
+        out_dict["warnings"] = warn
+    
+    out = SubcrtOutput(out_dict)
+    
+    if show:
+        for table in out.__dict__.keys():
+            if not isinstance(out[table], dict):
+                display(out[table])
+            else:
+                for subtable in out[table].keys():
+                    print("\n"+subtable+":") # species name
+                    display(out[table][subtable])
+    
+    return out
