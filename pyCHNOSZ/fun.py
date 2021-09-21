@@ -40,6 +40,9 @@ def __r_inline_plot(width=600, height=520, dpi=150, plot_it=True):
         
     dpi : numeric, default 150
         Resolution of the plot.
+
+    plot_it : bool, default True
+        Render the plot?
     """
     
     with grdevices.render_to_bytesio(grdevices.png, 
@@ -68,6 +71,22 @@ def __flatten_list(_2d_list):
 
 
 def html_chemname_format(name):
+    
+    """
+    Format a chemical formula to display subscripts and superscripts in HTML
+    (e.g., Plotly plots)
+    Example, "CH3COO-" becomes "CH<sub>3</sub>COO<sup>-</sup>"
+    
+    Parameters
+    ----------
+    name : str
+        A chemical formula.
+    
+    Returns
+    -------
+    A formatted chemical formula string.
+    """
+    
     p = re.compile(r'(?P<sp>\+|-\d+?$)')
     name = p.sub(r'<sup>\g<sp></sup>', name)
     
@@ -82,6 +101,11 @@ def html_chemname_format(name):
 
 
 def __seq(start, end, by=None, length_out=None):
+    
+    """
+    Mimic the seq() function in base R.
+    """
+    
     len_provided = True if (length_out is not None) else False
     by_provided = True if (by is not None) else False
     if (not by_provided) & (not len_provided):
@@ -124,7 +148,7 @@ def animation(basis_args={}, species_args={}, affinity_args={},
         animated diagram.
         Example: basis_args={'species':['CO2', 'O2', 'H2O', 'H+']}
 
-    basis_args : dict
+    species_args : dict
         Dictionary of options for defining species (see `species`) in the
         animated diagram.
         Example: species_args={'species':['CO2', 'HCO3-', 'CO3-2']}
@@ -447,34 +471,6 @@ def animation(basis_args={}, species_args={}, affinity_args={},
         xaxis_title=html_chemname_format(xlab),
         yaxis_title=html_chemname_format(ylab),
         margin={"t": 40, "r":60},
-#         updatemenus = [
-#         {
-#             "buttons": [
-#                 {
-#                     "args": [None, {"frame": {"duration": 500, "redraw": False},
-#                                     "fromcurrent": True, "transition": {"duration": 300,
-#                                                                         "easing": "quadratic-in-out"}}],
-#                     "label": "Play",
-#                     "method": "animate"
-#                 },
-#                 {
-#                     "args": [[None], {"frame": {"duration": 0, "redraw": False},
-#                                       "mode": "immediate",
-#                                       "transition": {"duration": 0}}],
-#                     "label": "Pause",
-#                     "method": "animate"
-#                 }
-#             ],
-#             "direction": "left",
-#             "pad": {"r": 10, "t": 87},
-#             "showactive": False,
-#             "type": "buttons",
-#             "x": 0.1,
-#             "xanchor": "right",
-#             "y": 0,
-#             "yanchor": "top"
-#         }
-#     ])
     )
 
     config = {'displaylogo': False,
@@ -493,7 +489,7 @@ def diagram_interactive(data, title=None,
                         plot_it=True):
     
     """
-    Produce an interactive Plotly plot.
+    Produce an interactive diagram.
     
     Parameters
     ----------
@@ -2032,13 +2028,81 @@ class thermo(object):
          return getattr(self, item)
 
         
-def unicurve(logK, species, phase, stoich, pressures=1, temperatures=25,
-             minT=0.1, maxT=100, minP=1, maxP=500,
+def unicurve(logK, species, state, stoich, pressures=1, temperatures=25, IS=0,
+             minT=0.1, maxT=100, minP=1, maxP=500, tol=0.00001,
              solve="T", width=600, height=520, dpi=90, plot_it=True,
              messages=True, show=True):
     
+    """
+    Solve for temperatures or pressures of equilibration for a given logK
+    value and produce a plot.
+    
+    Parameters
+    ----------
+    logK : numeric
+        Logarithm (base 10) of an equilibrium constant.
+    
+    species : str, int, or list of str or int
+        Name or formula of species, or numeric, rownumber of species in the
+        OBIGT database.
+
+    coeff : numeric or list of numeric, optional
+        Reaction coefficients on species.
+
+    state : str or list of str, optional
+        State(s) of species.
+
+    pressures, temperatures : numeric or list of numeric
+        Pressures (if solving for temperature) or temperatures (if solving for
+        pressures) to resolve with `logK`. Pressures are in bars and
+        temperatures are in degrees Celcius.
+
+    IS : numeric or list of numeric, optional
+        Ionic strength(s) at which to calculate adjusted molal properties,
+        mol kg^-1.
+    
+    minT, maxT : numeric
+        Minimum and maximum temperatures (degrees Celcius) to search within for
+        a solution for the given pressure(s) and logK. Ignored if solving for
+        pressure.
+    
+    minP, maxP : numeric
+        Minimum and maximum pressures (bars) to search within for
+        a solution for the given temperatures(s) and logK. Ignored if solving
+        for temperature.
+    
+    tol : float
+        Tolerance for finding a temperature or pressure that converges on the
+        given logK. Will attempt to find a solution that satisfies logK plus or
+        minus `tol`.
+    
+    solve : "T" or "P"
+        Solve for temperature or pressure?
+    
+    width, height : numeric, default 600 by 520
+        Width and height of the plot.
+        
+    dpi : numeric, default 90
+        Resolution of the plot.
+
+    plot_it : bool, default True
+        Show the plot?
+    
+    messages : bool, default True
+        Display messages from CHNOSZ?
+
+    show : bool, default True
+        Display CHNOSZ tables?
+    
+    Returns
+    -------
+    out : object of class SubcrtOutput
+        An object that stores the output of `subcrt` along the univariant curve.
+    
+    """
+    
     species = _convert_to_RVector(species, force_Rvec=False)
-    phase = _convert_to_RVector(phase, force_Rvec=False)
+    state = _convert_to_RVector(state, force_Rvec=False)
     stoich = _convert_to_RVector(stoich, force_Rvec=False)
     pressures = _convert_to_RVector(pressures, force_Rvec=False)
     temperatures = _convert_to_RVector(temperatures, force_Rvec=False)
@@ -2051,15 +2115,17 @@ def unicurve(logK, species, phase, stoich, pressures=1, temperatures=25,
         if solve=="T":
             a = ro.r.uc_solveT(logK=logK,
                                species=species,
-                               phase=phase,
+                               phase=state,
                                stoich=stoich,
                                pressures=pressures,
+                               IS=IS,
                                minT=minT,
-                               maxT=maxT)
+                               maxT=maxT,
+                               tol=tol)
             with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
                 ro.r.create_output_plot_T(logK=logK,
                                           species=species,
-                                          phase=phase,
+                                          phase=state,
                                           stoich=stoich,
                                           pressures=pressures,
                                           minT=minT,
@@ -2067,19 +2133,21 @@ def unicurve(logK, species, phase, stoich, pressures=1, temperatures=25,
         elif solve=="P":
             a = ro.r.uc_solveP(logK=logK,
                                species=species,
-                               phase=phase,
+                               phase=state,
                                stoich=stoich,
                                temperatures=temperatures,
+                               IS=IS,
                                minP=minP,
                                maxP=maxP)
             with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
                 ro.r.create_output_plot_P(logK=logK,
                                           species=species,
-                                          phase=phase,
+                                          phase=state,
                                           stoich=stoich,
                                           temperatures=temperatures,
                                           minP=minP,
-                                          maxP=maxP)
+                                          maxP=maxP,
+                                          tol=tol)
     if messages:
         for warning in w:
             print(warning.message)

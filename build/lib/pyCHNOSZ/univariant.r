@@ -6,12 +6,10 @@
 
 ########### UNIVARIANT CURVE FUNCTIONS ###########
 
-uc_solveT <- function(logK, species, phase, stoich = rep(1, length(species)), pressures = 1, minT = 0.1, maxT = 100){
+uc_solveT <- function(logK, species, phase, stoich = rep(1, length(species)), pressures = 1, IS=0, minT = 0.1, maxT = 100, tol=0.00001){
 
   user_minT <- minT
   user_maxT <- maxT
-
-  tol <- 0.00001 # tolerance threshold for logK
 
   # create a data frame to hold results
   PlH <- rep(NA, length(pressures)) # placeholder
@@ -36,14 +34,14 @@ uc_solveT <- function(logK, species, phase, stoich = rep(1, length(species)), pr
     converged <- FALSE
 
     while(!converged){
-      if(completed_iter > 100){
+      if(completed_iter > 1000){
         print("Too many iterations (>100). Terminating calculation.")
         break
       }
 
       # perform a subcrt calculation using a guess
       guessT <- mean(c(minT, maxT))
-      guess_calc <- suppressMessages(subcrt(species, phase, stoich, T = guessT, P = pressure))
+      guess_calc <- suppressMessages(subcrt(species, phase, stoich, T = guessT, P = pressure, IS=IS, exceed.Ttr=T))
       guesslogK <- guess_calc$out$logK
         
 
@@ -51,7 +49,10 @@ uc_solveT <- function(logK, species, phase, stoich = rep(1, length(species)), pr
       if(abs(logK - guesslogK) < tol){
         this_P <- sprintf("%.3f", round(pressure, 3))
         df[df[, "P"] == this_P, "T"] <- sprintf("%.3f", round(guessT, 3))
-        df[df[, "P"] == this_P, "rho"] <- sprintf("%.3f", round(guess_calc$out$rho, 3))
+        
+        if("rho" %in% names(guess_calc$out)){
+          df[df[, "P"] == this_P, "rho"] <- sprintf("%.3f", round(guess_calc$out$rho, 3))
+        }
         df[df[, "P"] == this_P, "logK"] <- sprintf("%.3f", round(guesslogK, 3))
         df[df[, "P"] == this_P, "G"] <- sprintf("%.0f", round(guess_calc$out$G, 0))
         df[df[, "P"] == this_P, "H"] <- sprintf("%.0f", round(guess_calc$out$H, 0))
@@ -66,7 +67,7 @@ uc_solveT <- function(logK, species, phase, stoich = rep(1, length(species)), pr
       }
 
       # perform an initial calculation across a range of temperatures bounded by current minT and maxT
-      init_calc <- suppressMessages(subcrt(species, phase, stoich, T = seq(minT, maxT, length.out = 10), P = pressure)$out)
+      init_calc <- suppressMessages(subcrt(species, phase, stoich, T = seq(minT, maxT, length.out = 10), P = pressure, IS=IS, exceed.Ttr=T)$out)
 
       # Check if logK falls between any of the temperature iterations in the initial calculation
       logK_check_complete <- FALSE
@@ -121,10 +122,17 @@ uc_solveT <- function(logK, species, phase, stoich = rep(1, length(species)), pr
     } # end !converged while loop
 
   } # end pressure for loop
-
+    
   # convert columns to numeric
   df <- result[["out"]]
-  cols.num <- c("P", "T", "rho", "logK", "G", "H", "S", "V", "Cp")
+  cols.num <- c("P", "T", "logK", "G", "H", "S", "V", "Cp")
+
+  if(!("rho" %in% names(guess_calc$out))){
+    df <- df[ , -which(names(df) %in% c("rho"))] # drop the empty rho column
+  }else{
+    cols.num <- c(cols.num, "rho")
+  }
+
   df[cols.num] <- sapply(df[cols.num], as.numeric)
   result[["out"]] <- df
     
@@ -135,12 +143,10 @@ uc_solveT <- function(logK, species, phase, stoich = rep(1, length(species)), pr
 
 
 
-uc_solveP <- function(logK, species, phase, stoich = rep(1, length(species)), temperatures = 1, minP = 1, maxP = 500){
+uc_solveP <- function(logK, species, phase, stoich = rep(1, length(species)), temperatures = 1, IS=0, minP = 1, maxP = 500, tol=0.00001){
 
   user_minP <- minP
   user_maxP <- maxP
-
-  tol <- 0.00001 # tolerance threshold for logK
 
   # create a data frame to hold results
   PlH <- rep(NA, length(temperatures)) # placeholder
@@ -172,7 +178,7 @@ uc_solveP <- function(logK, species, phase, stoich = rep(1, length(species)), te
 
       # perform a subcrt calculation using a guess
       guessP <- mean(c(minP, maxP))
-      guess_calc <- suppressMessages(subcrt(species, phase, stoich, P = guessP, T = temperature))
+      guess_calc <- suppressMessages(subcrt(species, phase, stoich, P = guessP, T = temperature, IS=IS))
       guesslogK <- guess_calc$out$logK
 
       # check if initial guess is close enough to actual logK within tolerance
@@ -194,7 +200,7 @@ uc_solveP <- function(logK, species, phase, stoich = rep(1, length(species)), te
       }
 
       # perform an initial calculation across a range of temperatures bounded by current minT and maxT
-      init_calc <- suppressMessages(subcrt(species, phase, stoich, P = seq(minP, maxP, length.out = 10), T = temperature)$out)
+      init_calc <- suppressMessages(subcrt(species, phase, stoich, P = seq(minP, maxP, length.out = 10), T = temperature, IS=IS)$out)
 
 
       # Check if logK falls between any of the temperature iterations in the initial calculation
@@ -251,7 +257,14 @@ uc_solveP <- function(logK, species, phase, stoich = rep(1, length(species)), te
     
   # convert columns to numeric
   df <- result[["out"]]
-  cols.num <- c("P", "T", "rho", "logK", "G", "H", "S", "V", "Cp")
+  cols.num <- c("P", "T", "logK", "G", "H", "S", "V", "Cp")
+    
+  if(!("rho" %in% names(guess_calc$out))){
+    df <- df[ , -which(names(df) %in% c("rho"))] # drop the empty rho column
+  }else{
+    cols.num <- c(cols.num, "rho")
+  }
+    
   df[cols.num] <- sapply(df[cols.num], as.numeric)
   result[["out"]] <- df
     
