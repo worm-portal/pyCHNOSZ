@@ -38,6 +38,7 @@ import plotly.graph_objects as go
 import copy
 import statistics
 import pkg_resources
+import decimal
 
 with warnings.catch_warnings():
     warnings.simplefilter(&#34;ignore&#34;)
@@ -115,7 +116,7 @@ def html_chemname_format(name):
     A formatted chemical formula string.
     &#34;&#34;&#34;
     
-    p = re.compile(r&#39;(?P&lt;sp&gt;\+|-\d+?$)&#39;)
+    p = re.compile(r&#39;(?P&lt;sp&gt;[-+]\d+?$)&#39;)
     name = p.sub(r&#39;&lt;sup&gt;\g&lt;sp&gt;&lt;/sup&gt;&#39;, name)
     
     name_no_charge = re.match(r&#39;(?:(?!&lt;|$).)*&#39;, name).group(0)
@@ -2056,8 +2057,8 @@ class thermo(object):
          return getattr(self, item)
 
         
-def unicurve(logK, species, state, stoich, pressures=1, temperatures=25, IS=0,
-             minT=0.1, maxT=100, minP=1, maxP=500, tol=0.00001,
+def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
+             minT=0.1, maxT=100, minP=1, maxP=500, tol=None,
              solve=&#34;T&#34;, width=600, height=520, dpi=90, plot_it=True,
              messages=True, show=True):
     
@@ -2076,7 +2077,7 @@ def unicurve(logK, species, state, stoich, pressures=1, temperatures=25, IS=0,
 
     coeff : numeric or list of numeric, optional
         Reaction coefficients on species.
-
+        
     state : str or list of str, optional
         State(s) of species.
 
@@ -2102,7 +2103,9 @@ def unicurve(logK, species, state, stoich, pressures=1, temperatures=25, IS=0,
     tol : float
         Tolerance for finding a temperature or pressure that converges on the
         given logK. Will attempt to find a solution that satisfies logK plus or
-        minus `tol`.
+        minus `tol`. By default, tol is equal to 1/(10^(n+2)) where n is the
+        number of decimal places in logK, with a maximum default tolerance of
+        1e-5.
     
     solve : &#34;T&#34; or &#34;P&#34;
         Solve for temperature or pressure?
@@ -2128,10 +2131,17 @@ def unicurve(logK, species, state, stoich, pressures=1, temperatures=25, IS=0,
         An object that stores the output of `subcrt` along the univariant curve.
     
     &#34;&#34;&#34;
-    
+
+    if tol == None:
+        d = decimal.Decimal(str(this_logK))
+        n_decimals = abs(d.as_tuple().exponent)
+        tol = float(&#34;0.&#34;+&#34;&#34;.join(n_decimals*[&#34;0&#34;])+&#34;01&#34;)
+        if tol &gt; 0.00001:
+            tol = 0.00001
+                
     species = _convert_to_RVector(species, force_Rvec=False)
     state = _convert_to_RVector(state, force_Rvec=False)
-    stoich = _convert_to_RVector(stoich, force_Rvec=False)
+    coeff = _convert_to_RVector(coeff, force_Rvec=False)
     pressures = _convert_to_RVector(pressures, force_Rvec=False)
     temperatures = _convert_to_RVector(temperatures, force_Rvec=False)
     
@@ -2143,39 +2153,41 @@ def unicurve(logK, species, state, stoich, pressures=1, temperatures=25, IS=0,
         if solve==&#34;T&#34;:
             a = ro.r.uc_solveT(logK=logK,
                                species=species,
-                               phase=state,
-                               stoich=stoich,
+                               coeff=coeff,
+                               state=state,
                                pressures=pressures,
                                IS=IS,
                                minT=minT,
                                maxT=maxT,
                                tol=tol)
-            with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
-                ro.r.create_output_plot_T(logK=logK,
-                                          species=species,
-                                          phase=state,
-                                          stoich=stoich,
-                                          pressures=pressures,
-                                          minT=minT,
-                                          maxT=maxT)
+            if plot_it:
+                with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
+                    ro.r.create_output_plot_T(logK=logK,
+                                              species=species,
+                                              coeff=coeff,
+                                              state=state,
+                                              pressures=pressures,
+                                              minT=minT,
+                                              maxT=maxT)
         elif solve==&#34;P&#34;:
             a = ro.r.uc_solveP(logK=logK,
                                species=species,
-                               phase=state,
-                               stoich=stoich,
+                               state=state,
+                               coeff=coeff,
                                temperatures=temperatures,
                                IS=IS,
                                minP=minP,
                                maxP=maxP)
-            with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
-                ro.r.create_output_plot_P(logK=logK,
-                                          species=species,
-                                          phase=state,
-                                          stoich=stoich,
-                                          temperatures=temperatures,
-                                          minP=minP,
-                                          maxP=maxP,
-                                          tol=tol)
+            if plot_it:
+                with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
+                    ro.r.create_output_plot_P(logK=logK,
+                                              species=species,
+                                              state=state,
+                                              coeff=coeff,
+                                              temperatures=temperatures,
+                                              minP=minP,
+                                              maxP=maxP,
+                                              tol=tol)
     if messages:
         for warning in w:
             print(warning.message)
@@ -2202,7 +2214,138 @@ def unicurve(logK, species, state, stoich, pressures=1, temperatures=25, IS=0,
                     print(&#34;\n&#34;+subtable+&#34;:&#34;) # species name
                     display(out[table][subtable])
     
-    return out</code></pre>
+    return out
+
+
+def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
+                  tol=None, title=None, res=10, width=500, height=400,
+                  show=False, messages=False, plot_it=True):
+
+    &#34;&#34;&#34;
+    Solve for temperatures or pressures of equilibration for a given logK
+    value and produce a plot with temperature and pressure axes.
+    
+    Parameters
+    ----------
+    logK : numeric
+        Logarithm (base 10) of an equilibrium constant.
+    
+    species : str, int, or list of str or int
+        Name or formula of species, or numeric, rownumber of species in the
+        OBIGT database.
+
+    coeff : numeric or list of numeric, optional
+        Reaction coefficients on species.
+
+    state : str or list of str, optional
+        State(s) of species.
+
+    Trange : list of two numeric
+        List containing the minimum and maximum temperature, in degrees C, to
+        solve for the specified logK value. Does not necessarily correspond to
+        temperature axis range in the resulting plot.
+
+    Prange : list of two numeric
+        List containing the minimum and maximum pressure, in bars, to
+        solve for the specified logK value. Does not necessarily correspond to
+        pressure axis range in the resulting plot.
+
+    IS : numeric or list of numeric, optional
+        Ionic strength(s) at which to calculate adjusted molal properties,
+        mol kg^-1.
+    
+    tol : float
+        Tolerance for finding a temperature or pressure that converges on the
+        given logK. Will attempt to find a solution that satisfies logK plus or
+        minus `tol`. By default, tol is equal to 1/(10^(n+2)) where n is the
+        number of decimal places in logK, with a maximum default tolerance of
+        1e-5.
+    
+    width, height : numeric, default 500 by 400
+        Width and height of the plot.
+
+    messages : bool, default True
+        Display messages from CHNOSZ?
+
+    show : bool, default True
+        Display CHNOSZ tables?
+
+    plot_it : bool, default True
+        Show the plot?
+    
+    Returns
+    -------
+    out : object of class SubcrtOutput
+        An object that stores the output of `subcrt` along the univariant curve.
+    
+    &#34;&#34;&#34;
+    
+    if not isinstance(logK, list):
+        logK = [logK]
+    
+    fig = go.Figure()
+    
+    output = []
+    
+    for this_logK in logK:
+        
+        if tol == None:
+            d = decimal.Decimal(str(this_logK))
+            n_decimals = abs(d.as_tuple().exponent)
+            tol = float(&#34;0.&#34;+&#34;&#34;.join(n_decimals*[&#34;0&#34;])+&#34;01&#34;)
+            if tol &gt; 0.00001:
+                tol = 0.00001
+        
+        out = unicurve(solve=&#34;T&#34;,
+                       logK=this_logK,
+                       species=species,
+                       state=state,
+                       coeff=coeff,
+                       pressures=list(np.linspace(start=Prange[0], stop=Prange[1], num=res)),
+                       minT=Trange[0],
+                       maxT=Trange[1],
+                       IS=IS,
+                       tol=tol,
+                       show=show,
+                       plot_it=False, messages=messages)
+        
+        if not out[&#34;out&#34;][&#34;T&#34;].isnull().all():
+            fig.add_trace(go.Scatter(
+                x=out[&#34;out&#34;][&#34;T&#34;],
+                y=out[&#34;out&#34;][&#34;P&#34;],
+                mode=&#34;lines+markers&#34;,
+                name=&#34;logK=&#34;+str(this_logK),
+                text = [&#34;logK=&#34;+str(this_logK) for i in range(0, len(out[&#34;out&#34;][&#34;T&#34;]))],
+                hovertemplate = &#39;%{text}&lt;br&gt;T, °C=%{x:.2f}&lt;br&gt;P, bar=%{y:.2f}&lt;extra&gt;&lt;/extra&gt;&#39;,
+            ))
+        else:
+            print(&#34;Could not find any T or P values in this range that correspond to a logK value of {}&#34;.format(this_logK))
+        output.append(out)
+    
+    if title == None:
+        react_grid = output[0][&#34;reaction&#34;]
+        react_grid[&#34;name&#34;] = [name  if name != &#34;water&#34; else &#34;H2O&#34; for name in react_grid[&#34;name&#34;]] # replace any &#34;water&#34; with &#34;H2O&#34; in the written reaction
+        reactants = &#34; + &#34;.join([(str(-react_grid[&#34;coeff&#34;][i])+&#34; &#34; if -react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &lt; 0])
+        products = &#34; + &#34;.join([(str(react_grid[&#34;coeff&#34;][i])+&#34; &#34; if react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &gt; 0])
+        
+        title = reactants + &#34; = &#34; + products
+    
+    fig.update_layout(template=&#34;simple_white&#34;,
+                      title=str(title),
+                      xaxis_title=&#34;T, °C&#34;,
+                      yaxis_title=&#34;P, bar&#34;,
+                      width=width,
+                      height=height,
+                      hoverlabel=dict(bgcolor=&#34;white&#34;),
+    )
+    
+    config = {&#39;displaylogo&#39;: False,
+              &#39;modeBarButtonsToRemove&#39;: [&#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;]}
+    
+    if plot_it:
+        fig.show(config=config)
+    
+    return output</code></pre>
 </details>
 </section>
 <section>
@@ -3790,7 +3933,7 @@ Example, "CH3COO-" becomes "CH<sub>3</sub>COO<sup>-</sup>"</p>
     A formatted chemical formula string.
     &#34;&#34;&#34;
     
-    p = re.compile(r&#39;(?P&lt;sp&gt;\+|-\d+?$)&#39;)
+    p = re.compile(r&#39;(?P&lt;sp&gt;[-+]\d+?$)&#39;)
     name = p.sub(r&#39;&lt;sup&gt;\g&lt;sp&gt;&lt;/sup&gt;&#39;, name)
     
     name_no_charge = re.match(r&#39;(?:(?!&lt;|$).)*&#39;, name).group(0)
@@ -4527,7 +4670,7 @@ mol kg^-1.</dd>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.unicurve"><code class="name flex">
-<span>def <span class="ident">unicurve</span></span>(<span>logK, species, state, stoich, pressures=1, temperatures=25, IS=0, minT=0.1, maxT=100, minP=1, maxP=500, tol=1e-05, solve='T', width=600, height=520, dpi=90, plot_it=True, messages=True, show=True)</span>
+<span>def <span class="ident">unicurve</span></span>(<span>logK, species, coeff, state, pressures=1, temperatures=25, IS=0, minT=0.1, maxT=100, minP=1, maxP=500, tol=None, solve='T', width=600, height=520, dpi=90, plot_it=True, messages=True, show=True)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Solve for temperatures or pressures of equilibration for a given logK
@@ -4561,7 +4704,9 @@ for temperature.</dd>
 <dt><strong><code>tol</code></strong> :&ensp;<code>float</code></dt>
 <dd>Tolerance for finding a temperature or pressure that converges on the
 given logK. Will attempt to find a solution that satisfies logK plus or
-minus <code>tol</code>.</dd>
+minus <code>tol</code>. By default, tol is equal to 1/(10^(n+2)) where n is the
+number of decimal places in logK, with a maximum default tolerance of
+1e-5.</dd>
 <dt><strong><code>solve</code></strong> :&ensp;<code>"T"</code> or <code>"P"</code></dt>
 <dd>Solve for temperature or pressure?</dd>
 <dt><strong><code>width</code></strong>, <strong><code>height</code></strong> :&ensp;<code>numeric</code>, default <code>600 by 520</code></dt>
@@ -4584,8 +4729,8 @@ minus <code>tol</code>.</dd>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def unicurve(logK, species, state, stoich, pressures=1, temperatures=25, IS=0,
-             minT=0.1, maxT=100, minP=1, maxP=500, tol=0.00001,
+<pre><code class="python">def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
+             minT=0.1, maxT=100, minP=1, maxP=500, tol=None,
              solve=&#34;T&#34;, width=600, height=520, dpi=90, plot_it=True,
              messages=True, show=True):
     
@@ -4604,7 +4749,7 @@ minus <code>tol</code>.</dd>
 
     coeff : numeric or list of numeric, optional
         Reaction coefficients on species.
-
+        
     state : str or list of str, optional
         State(s) of species.
 
@@ -4630,7 +4775,9 @@ minus <code>tol</code>.</dd>
     tol : float
         Tolerance for finding a temperature or pressure that converges on the
         given logK. Will attempt to find a solution that satisfies logK plus or
-        minus `tol`.
+        minus `tol`. By default, tol is equal to 1/(10^(n+2)) where n is the
+        number of decimal places in logK, with a maximum default tolerance of
+        1e-5.
     
     solve : &#34;T&#34; or &#34;P&#34;
         Solve for temperature or pressure?
@@ -4656,10 +4803,17 @@ minus <code>tol</code>.</dd>
         An object that stores the output of `subcrt` along the univariant curve.
     
     &#34;&#34;&#34;
-    
+
+    if tol == None:
+        d = decimal.Decimal(str(this_logK))
+        n_decimals = abs(d.as_tuple().exponent)
+        tol = float(&#34;0.&#34;+&#34;&#34;.join(n_decimals*[&#34;0&#34;])+&#34;01&#34;)
+        if tol &gt; 0.00001:
+            tol = 0.00001
+                
     species = _convert_to_RVector(species, force_Rvec=False)
     state = _convert_to_RVector(state, force_Rvec=False)
-    stoich = _convert_to_RVector(stoich, force_Rvec=False)
+    coeff = _convert_to_RVector(coeff, force_Rvec=False)
     pressures = _convert_to_RVector(pressures, force_Rvec=False)
     temperatures = _convert_to_RVector(temperatures, force_Rvec=False)
     
@@ -4671,39 +4825,41 @@ minus <code>tol</code>.</dd>
         if solve==&#34;T&#34;:
             a = ro.r.uc_solveT(logK=logK,
                                species=species,
-                               phase=state,
-                               stoich=stoich,
+                               coeff=coeff,
+                               state=state,
                                pressures=pressures,
                                IS=IS,
                                minT=minT,
                                maxT=maxT,
                                tol=tol)
-            with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
-                ro.r.create_output_plot_T(logK=logK,
-                                          species=species,
-                                          phase=state,
-                                          stoich=stoich,
-                                          pressures=pressures,
-                                          minT=minT,
-                                          maxT=maxT)
+            if plot_it:
+                with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
+                    ro.r.create_output_plot_T(logK=logK,
+                                              species=species,
+                                              coeff=coeff,
+                                              state=state,
+                                              pressures=pressures,
+                                              minT=minT,
+                                              maxT=maxT)
         elif solve==&#34;P&#34;:
             a = ro.r.uc_solveP(logK=logK,
                                species=species,
-                               phase=state,
-                               stoich=stoich,
+                               state=state,
+                               coeff=coeff,
                                temperatures=temperatures,
                                IS=IS,
                                minP=minP,
                                maxP=maxP)
-            with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
-                ro.r.create_output_plot_P(logK=logK,
-                                          species=species,
-                                          phase=state,
-                                          stoich=stoich,
-                                          temperatures=temperatures,
-                                          minP=minP,
-                                          maxP=maxP,
-                                          tol=tol)
+            if plot_it:
+                with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
+                    ro.r.create_output_plot_P(logK=logK,
+                                              species=species,
+                                              state=state,
+                                              coeff=coeff,
+                                              temperatures=temperatures,
+                                              minP=minP,
+                                              maxP=maxP,
+                                              tol=tol)
     if messages:
         for warning in w:
             print(warning.message)
@@ -4731,6 +4887,189 @@ minus <code>tol</code>.</dd>
                     display(out[table][subtable])
     
     return out</code></pre>
+</details>
+</dd>
+<dt id="pyCHNOSZ.fun.univariant_TP"><code class="name flex">
+<span>def <span class="ident">univariant_TP</span></span>(<span>logK, species, coeff, state, Trange, Prange, IS=0, tol=None, title=None, res=10, width=500, height=400, show=False, messages=False, plot_it=True)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Solve for temperatures or pressures of equilibration for a given logK
+value and produce a plot with temperature and pressure axes.</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>logK</code></strong> :&ensp;<code>numeric</code></dt>
+<dd>Logarithm (base 10) of an equilibrium constant.</dd>
+<dt><strong><code>species</code></strong> :&ensp;<code>str, int,</code> or <code>list</code> of <code>str</code> or <code>int</code></dt>
+<dd>Name or formula of species, or numeric, rownumber of species in the
+OBIGT database.</dd>
+<dt><strong><code>coeff</code></strong> :&ensp;<code>numeric</code> or <code>list</code> of <code>numeric</code>, optional</dt>
+<dd>Reaction coefficients on species.</dd>
+<dt><strong><code>state</code></strong> :&ensp;<code>str</code> or <code>list</code> of <code>str</code>, optional</dt>
+<dd>State(s) of species.</dd>
+<dt><strong><code>Trange</code></strong> :&ensp;<code>list</code> of <code>two numeric</code></dt>
+<dd>List containing the minimum and maximum temperature, in degrees C, to
+solve for the specified logK value. Does not necessarily correspond to
+temperature axis range in the resulting plot.</dd>
+<dt><strong><code>Prange</code></strong> :&ensp;<code>list</code> of <code>two numeric</code></dt>
+<dd>List containing the minimum and maximum pressure, in bars, to
+solve for the specified logK value. Does not necessarily correspond to
+pressure axis range in the resulting plot.</dd>
+<dt><strong><code>IS</code></strong> :&ensp;<code>numeric</code> or <code>list</code> of <code>numeric</code>, optional</dt>
+<dd>Ionic strength(s) at which to calculate adjusted molal properties,
+mol kg^-1.</dd>
+<dt><strong><code>tol</code></strong> :&ensp;<code>float</code></dt>
+<dd>Tolerance for finding a temperature or pressure that converges on the
+given logK. Will attempt to find a solution that satisfies logK plus or
+minus <code>tol</code>. By default, tol is equal to 1/(10^(n+2)) where n is the
+number of decimal places in logK, with a maximum default tolerance of
+1e-5.</dd>
+<dt><strong><code>width</code></strong>, <strong><code>height</code></strong> :&ensp;<code>numeric</code>, default <code>500 by 400</code></dt>
+<dd>Width and height of the plot.</dd>
+<dt><strong><code>messages</code></strong> :&ensp;<code>bool</code>, default <code>True</code></dt>
+<dd>Display messages from CHNOSZ?</dd>
+<dt><strong><code>show</code></strong> :&ensp;<code>bool</code>, default <code>True</code></dt>
+<dd>Display CHNOSZ tables?</dd>
+<dt><strong><code>plot_it</code></strong> :&ensp;<code>bool</code>, default <code>True</code></dt>
+<dd>Show the plot?</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>out</code></strong> :&ensp;<code>object</code> of <code>class <a title="pyCHNOSZ.fun.SubcrtOutput" href="#pyCHNOSZ.fun.SubcrtOutput">SubcrtOutput</a></code></dt>
+<dd>An object that stores the output of <code><a title="pyCHNOSZ.fun.subcrt" href="#pyCHNOSZ.fun.subcrt">subcrt()</a></code> along the univariant curve.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
+                  tol=None, title=None, res=10, width=500, height=400,
+                  show=False, messages=False, plot_it=True):
+
+    &#34;&#34;&#34;
+    Solve for temperatures or pressures of equilibration for a given logK
+    value and produce a plot with temperature and pressure axes.
+    
+    Parameters
+    ----------
+    logK : numeric
+        Logarithm (base 10) of an equilibrium constant.
+    
+    species : str, int, or list of str or int
+        Name or formula of species, or numeric, rownumber of species in the
+        OBIGT database.
+
+    coeff : numeric or list of numeric, optional
+        Reaction coefficients on species.
+
+    state : str or list of str, optional
+        State(s) of species.
+
+    Trange : list of two numeric
+        List containing the minimum and maximum temperature, in degrees C, to
+        solve for the specified logK value. Does not necessarily correspond to
+        temperature axis range in the resulting plot.
+
+    Prange : list of two numeric
+        List containing the minimum and maximum pressure, in bars, to
+        solve for the specified logK value. Does not necessarily correspond to
+        pressure axis range in the resulting plot.
+
+    IS : numeric or list of numeric, optional
+        Ionic strength(s) at which to calculate adjusted molal properties,
+        mol kg^-1.
+    
+    tol : float
+        Tolerance for finding a temperature or pressure that converges on the
+        given logK. Will attempt to find a solution that satisfies logK plus or
+        minus `tol`. By default, tol is equal to 1/(10^(n+2)) where n is the
+        number of decimal places in logK, with a maximum default tolerance of
+        1e-5.
+    
+    width, height : numeric, default 500 by 400
+        Width and height of the plot.
+
+    messages : bool, default True
+        Display messages from CHNOSZ?
+
+    show : bool, default True
+        Display CHNOSZ tables?
+
+    plot_it : bool, default True
+        Show the plot?
+    
+    Returns
+    -------
+    out : object of class SubcrtOutput
+        An object that stores the output of `subcrt` along the univariant curve.
+    
+    &#34;&#34;&#34;
+    
+    if not isinstance(logK, list):
+        logK = [logK]
+    
+    fig = go.Figure()
+    
+    output = []
+    
+    for this_logK in logK:
+        
+        if tol == None:
+            d = decimal.Decimal(str(this_logK))
+            n_decimals = abs(d.as_tuple().exponent)
+            tol = float(&#34;0.&#34;+&#34;&#34;.join(n_decimals*[&#34;0&#34;])+&#34;01&#34;)
+            if tol &gt; 0.00001:
+                tol = 0.00001
+        
+        out = unicurve(solve=&#34;T&#34;,
+                       logK=this_logK,
+                       species=species,
+                       state=state,
+                       coeff=coeff,
+                       pressures=list(np.linspace(start=Prange[0], stop=Prange[1], num=res)),
+                       minT=Trange[0],
+                       maxT=Trange[1],
+                       IS=IS,
+                       tol=tol,
+                       show=show,
+                       plot_it=False, messages=messages)
+        
+        if not out[&#34;out&#34;][&#34;T&#34;].isnull().all():
+            fig.add_trace(go.Scatter(
+                x=out[&#34;out&#34;][&#34;T&#34;],
+                y=out[&#34;out&#34;][&#34;P&#34;],
+                mode=&#34;lines+markers&#34;,
+                name=&#34;logK=&#34;+str(this_logK),
+                text = [&#34;logK=&#34;+str(this_logK) for i in range(0, len(out[&#34;out&#34;][&#34;T&#34;]))],
+                hovertemplate = &#39;%{text}&lt;br&gt;T, °C=%{x:.2f}&lt;br&gt;P, bar=%{y:.2f}&lt;extra&gt;&lt;/extra&gt;&#39;,
+            ))
+        else:
+            print(&#34;Could not find any T or P values in this range that correspond to a logK value of {}&#34;.format(this_logK))
+        output.append(out)
+    
+    if title == None:
+        react_grid = output[0][&#34;reaction&#34;]
+        react_grid[&#34;name&#34;] = [name  if name != &#34;water&#34; else &#34;H2O&#34; for name in react_grid[&#34;name&#34;]] # replace any &#34;water&#34; with &#34;H2O&#34; in the written reaction
+        reactants = &#34; + &#34;.join([(str(-react_grid[&#34;coeff&#34;][i])+&#34; &#34; if -react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &lt; 0])
+        products = &#34; + &#34;.join([(str(react_grid[&#34;coeff&#34;][i])+&#34; &#34; if react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &gt; 0])
+        
+        title = reactants + &#34; = &#34; + products
+    
+    fig.update_layout(template=&#34;simple_white&#34;,
+                      title=str(title),
+                      xaxis_title=&#34;T, °C&#34;,
+                      yaxis_title=&#34;P, bar&#34;,
+                      width=width,
+                      height=height,
+                      hoverlabel=dict(bgcolor=&#34;white&#34;),
+    )
+    
+    config = {&#39;displaylogo&#39;: False,
+              &#39;modeBarButtonsToRemove&#39;: [&#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;]}
+    
+    if plot_it:
+        fig.show(config=config)
+    
+    return output</code></pre>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.water"><code class="name flex">
@@ -5133,6 +5472,7 @@ define the species of interest.</dd>
 <li><code><a title="pyCHNOSZ.fun.species" href="#pyCHNOSZ.fun.species">species</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.subcrt" href="#pyCHNOSZ.fun.subcrt">subcrt</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.unicurve" href="#pyCHNOSZ.fun.unicurve">unicurve</a></code></li>
+<li><code><a title="pyCHNOSZ.fun.univariant_TP" href="#pyCHNOSZ.fun.univariant_TP">univariant_TP</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.water" href="#pyCHNOSZ.fun.water">water</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.zc" href="#pyCHNOSZ.fun.zc">zc</a></code></li>
 </ul>

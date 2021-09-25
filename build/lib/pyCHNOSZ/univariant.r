@@ -6,7 +6,8 @@
 
 ########### UNIVARIANT CURVE FUNCTIONS ###########
 
-uc_solveT <- function(logK, species, phase, stoich = rep(1, length(species)), pressures = 1, IS=0, minT = 0.1, maxT = 100, tol=0.00001){
+uc_solveT <- function(logK, species, state, coeff,
+                      pressures = 1, IS=0, minT = 0.1, maxT = 100, tol=0.00001){
 
   user_minT <- minT
   user_maxT <- maxT
@@ -34,16 +35,37 @@ uc_solveT <- function(logK, species, phase, stoich = rep(1, length(species)), pr
     converged <- FALSE
 
     while(!converged){
-      if(completed_iter > 1000){
-        print("Too many iterations (>100). Terminating calculation.")
+      if(completed_iter > 100){
+        warning("Too many iterations (>100). Terminating calculation.")
         break
       }
 
       # perform a subcrt calculation using a guess
-      guessT <- mean(c(minT, maxT))
-      guess_calc <- suppressMessages(subcrt(species, phase, stoich, T = guessT, P = pressure, IS=IS, exceed.Ttr=T))
-      guesslogK <- guess_calc$out$logK
-        
+      found_guesslogK <- FALSE
+      iter_guesslogK <- 0
+      while(!found_guesslogK){
+        if(iter_guesslogK == 0){
+          guessT <- mean(c(minT, maxT))
+        }else if(iter_guesslogK <= 20){
+          guessT <- seq(minT, maxT, length.out=20)[iter_guesslogK]
+        }else{
+          warning("Could not find a viable temperature guess in this range after 20 tries. Terminating calculation.")
+          break
+        }
+            
+        guess_calc <- suppressMessages(subcrt(species, state, coeff, T = guessT, P = pressure, IS = IS, exceed.Ttr = T))
+        guesslogK <- guess_calc$out$logK
+          
+        if(!is.na(guesslogK) && is.finite(guesslogK)){
+          found_guesslogK <- TRUE
+        }else{
+          iter_guesslogK <- iter_guesslogK + 1
+        }
+      }
+    
+      if(is.na(guesslogK) | !is.finite(guesslogK)){
+        break
+      }
 
       # check if initial guess is close enough to actual logK within tolerance
       if(abs(logK - guesslogK) < tol){
@@ -67,7 +89,7 @@ uc_solveT <- function(logK, species, phase, stoich = rep(1, length(species)), pr
       }
 
       # perform an initial calculation across a range of temperatures bounded by current minT and maxT
-      init_calc <- suppressMessages(subcrt(species, phase, stoich, T = seq(minT, maxT, length.out = 10), P = pressure, IS=IS, exceed.Ttr=T)$out)
+      init_calc <- suppressMessages(subcrt(species, state, coeff, T = seq(minT, maxT, length.out = 200), P = pressure, IS=IS, exceed.Ttr=T)$out)
 
       # Check if logK falls between any of the temperature iterations in the initial calculation
       logK_check_complete <- FALSE
@@ -143,8 +165,10 @@ uc_solveT <- function(logK, species, phase, stoich = rep(1, length(species)), pr
 
 
 
-uc_solveP <- function(logK, species, phase, stoich = rep(1, length(species)), temperatures = 1, IS=0, minP = 1, maxP = 500, tol=0.00001){
-
+uc_solveP <- function(logK, species, state, coeff,
+                      temperatures = 1, IS=0,
+                      minP = 1, maxP = 500, tol=0.00001){
+    
   user_minP <- minP
   user_maxP <- maxP
 
@@ -178,7 +202,7 @@ uc_solveP <- function(logK, species, phase, stoich = rep(1, length(species)), te
 
       # perform a subcrt calculation using a guess
       guessP <- mean(c(minP, maxP))
-      guess_calc <- suppressMessages(subcrt(species, phase, stoich, P = guessP, T = temperature, IS=IS))
+      guess_calc <- suppressMessages(subcrt(species, state, coeff, P = guessP, T = temperature, IS=IS))
       guesslogK <- guess_calc$out$logK
 
       # check if initial guess is close enough to actual logK within tolerance
@@ -200,7 +224,7 @@ uc_solveP <- function(logK, species, phase, stoich = rep(1, length(species)), te
       }
 
       # perform an initial calculation across a range of temperatures bounded by current minT and maxT
-      init_calc <- suppressMessages(subcrt(species, phase, stoich, P = seq(minP, maxP, length.out = 10), T = temperature, IS=IS)$out)
+      init_calc <- suppressMessages(subcrt(species, state, coeff, P = seq(minP, maxP, length.out = 10), T = temperature, IS=IS)$out)
 
 
       # Check if logK falls between any of the temperature iterations in the initial calculation
@@ -280,9 +304,9 @@ write_csv_output <- function(result, create_output_csv=F){
 }
 
 ### Create plot temperature-based
-create_output_plot_T <- function(logK, species, phase, stoich, pressures, minT, maxT, res=300){
+create_output_plot_T <- function(logK, species, state, coeff, pressures, minT, maxT, res=300){
     # print(as.numeric(as.character(result$out$T)))
-    calc <- subcrt(species, phase, stoich, T=seq(minT, maxT, length.out=res), P=pressures[1])$out$logK
+    calc <- subcrt(species, state, coeff, T=seq(minT, maxT, length.out=res), P=pressures[1])$out$logK
 
     if(min(calc, na.rm=T) != Inf){
         if(logK < min(calc, na.rm=T)){
@@ -305,15 +329,15 @@ create_output_plot_T <- function(logK, species, phase, stoich, pressures, minT, 
     lines(x=seq(minT, maxT, length.out=res), y=rep(logK, res), col="red", lwd=3)
     for(pressure in pressures){
       lines(x=seq(minT, maxT, length.out=res),
-            y=subcrt(species, phase, stoich, T=seq(minT, maxT, length.out=res), P=pressure)$out$logK)
+            y=subcrt(species, state, coeff, T=seq(minT, maxT, length.out=res), P=pressure)$out$logK)
     }
     
 }
 
 ### Create plot pressure-based
-create_output_plot_P <- function(logK, species, phase, stoich, temperatures, minP, maxP, res=300){
+create_output_plot_P <- function(logK, species, state, coeff, temperatures, minP, maxP, res=300){
     #print(as.numeric(as.character(result$out$T)))
-    calc <- subcrt(species, phase, stoich, P=seq(minP, maxP, length.out=res), T=temperatures[1])$out$logK
+    calc <- subcrt(species, state, coeff, P=seq(minP, maxP, length.out=res), T=temperatures[1])$out$logK
 
     if(min(calc, na.rm=T) != Inf){
         if(logK < min(calc, na.rm=T)){
@@ -336,7 +360,7 @@ create_output_plot_P <- function(logK, species, phase, stoich, temperatures, min
     lines(x=seq(minP, maxP, length.out=res), y=rep(logK, res), col="red", lwd=3)
     for(temperature in temperatures){
       lines(x=seq(minP, maxP, length.out=res),
-            y=subcrt(species, phase, stoich, P=seq(minP, maxP, length.out=res), T=temperature)$out$logK)
+            y=subcrt(species, state, coeff, P=seq(minP, maxP, length.out=res), T=temperature)$out$logK)
     }
     
 }
