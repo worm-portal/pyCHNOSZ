@@ -88,7 +88,7 @@ def html_chemname_format(name):
     A formatted chemical formula string.
     """
     
-    p = re.compile(r'(?P<sp>[-+]\d+?$)')
+    p = re.compile(r'(?P<sp>[-+]\d*?$)')
     name = p.sub(r'<sup>\g<sp></sup>', name)
     
     name_no_charge = re.match(r'(?:(?!<|$).)*', name).group(0)
@@ -96,7 +96,11 @@ def html_chemname_format(name):
            "5": "<sub>5</sub>", "6": "<sub>6</sub>", "7": "<sub>7</sub>", "8": "<sub>8</sub>", "9": "<sub>9</sub>",
            ".":"<sub>.</sub>"}
     name_no_charge_formatted = "".join([mapping.get(x) or x for x in list(name_no_charge)])
-    name = re.sub(name_no_charge, name_no_charge_formatted, name)
+    
+    try:
+        name = re.sub(name_no_charge, name_no_charge_formatted, name)
+    except:
+        pass
 
     return(name)
 
@@ -606,6 +610,8 @@ def diagram_interactive(data, title=None,
         xlab = html_chemname_format(xlab)
 
     if len(xyvars) == 1:
+        
+        df["variable"] = df["variable"].apply(html_chemname_format)
         
         fig = px.line(df, x=xvar, y="value", color='variable', template="simple_white",
                       width=width,  height=height,
@@ -2105,7 +2111,7 @@ def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
     """
 
     if tol == None:
-        d = decimal.Decimal(str(this_logK))
+        d = decimal.Decimal(str(logK))
         n_decimals = abs(d.as_tuple().exponent)
         tol = float("0."+"".join(n_decimals*["0"])+"01")
         if tol > 0.00001:
@@ -2149,7 +2155,8 @@ def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
                                temperatures=temperatures,
                                IS=IS,
                                minP=minP,
-                               maxP=maxP)
+                               maxP=maxP,
+                               tol=tol)
             if plot_it:
                 with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
                     ro.r.create_output_plot_P(logK=logK,
@@ -2158,8 +2165,7 @@ def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
                                               coeff=coeff,
                                               temperatures=temperatures,
                                               minP=minP,
-                                              maxP=maxP,
-                                              tol=tol)
+                                              maxP=maxP)
     if messages:
         for warning in w:
             print(warning.message)

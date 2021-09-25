@@ -116,7 +116,7 @@ def html_chemname_format(name):
     A formatted chemical formula string.
     &#34;&#34;&#34;
     
-    p = re.compile(r&#39;(?P&lt;sp&gt;[-+]\d+?$)&#39;)
+    p = re.compile(r&#39;(?P&lt;sp&gt;[-+]\d*?$)&#39;)
     name = p.sub(r&#39;&lt;sup&gt;\g&lt;sp&gt;&lt;/sup&gt;&#39;, name)
     
     name_no_charge = re.match(r&#39;(?:(?!&lt;|$).)*&#39;, name).group(0)
@@ -124,7 +124,11 @@ def html_chemname_format(name):
            &#34;5&#34;: &#34;&lt;sub&gt;5&lt;/sub&gt;&#34;, &#34;6&#34;: &#34;&lt;sub&gt;6&lt;/sub&gt;&#34;, &#34;7&#34;: &#34;&lt;sub&gt;7&lt;/sub&gt;&#34;, &#34;8&#34;: &#34;&lt;sub&gt;8&lt;/sub&gt;&#34;, &#34;9&#34;: &#34;&lt;sub&gt;9&lt;/sub&gt;&#34;,
            &#34;.&#34;:&#34;&lt;sub&gt;.&lt;/sub&gt;&#34;}
     name_no_charge_formatted = &#34;&#34;.join([mapping.get(x) or x for x in list(name_no_charge)])
-    name = re.sub(name_no_charge, name_no_charge_formatted, name)
+    
+    try:
+        name = re.sub(name_no_charge, name_no_charge_formatted, name)
+    except:
+        pass
 
     return(name)
 
@@ -634,6 +638,8 @@ def diagram_interactive(data, title=None,
         xlab = html_chemname_format(xlab)
 
     if len(xyvars) == 1:
+        
+        df[&#34;variable&#34;] = df[&#34;variable&#34;].apply(html_chemname_format)
         
         fig = px.line(df, x=xvar, y=&#34;value&#34;, color=&#39;variable&#39;, template=&#34;simple_white&#34;,
                       width=width,  height=height,
@@ -2133,7 +2139,7 @@ def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
     &#34;&#34;&#34;
 
     if tol == None:
-        d = decimal.Decimal(str(this_logK))
+        d = decimal.Decimal(str(logK))
         n_decimals = abs(d.as_tuple().exponent)
         tol = float(&#34;0.&#34;+&#34;&#34;.join(n_decimals*[&#34;0&#34;])+&#34;01&#34;)
         if tol &gt; 0.00001:
@@ -2177,7 +2183,8 @@ def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
                                temperatures=temperatures,
                                IS=IS,
                                minP=minP,
-                               maxP=maxP)
+                               maxP=maxP,
+                               tol=tol)
             if plot_it:
                 with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
                     ro.r.create_output_plot_P(logK=logK,
@@ -2186,8 +2193,7 @@ def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
                                               coeff=coeff,
                                               temperatures=temperatures,
                                               minP=minP,
-                                              maxP=maxP,
-                                              tol=tol)
+                                              maxP=maxP)
     if messages:
         for warning in w:
             print(warning.message)
@@ -3666,6 +3672,8 @@ activities?</dd>
 
     if len(xyvars) == 1:
         
+        df[&#34;variable&#34;] = df[&#34;variable&#34;].apply(html_chemname_format)
+        
         fig = px.line(df, x=xvar, y=&#34;value&#34;, color=&#39;variable&#39;, template=&#34;simple_white&#34;,
                       width=width,  height=height,
                       labels=dict(value=ylab, x=xlab),
@@ -3933,7 +3941,7 @@ Example, "CH3COO-" becomes "CH<sub>3</sub>COO<sup>-</sup>"</p>
     A formatted chemical formula string.
     &#34;&#34;&#34;
     
-    p = re.compile(r&#39;(?P&lt;sp&gt;[-+]\d+?$)&#39;)
+    p = re.compile(r&#39;(?P&lt;sp&gt;[-+]\d*?$)&#39;)
     name = p.sub(r&#39;&lt;sup&gt;\g&lt;sp&gt;&lt;/sup&gt;&#39;, name)
     
     name_no_charge = re.match(r&#39;(?:(?!&lt;|$).)*&#39;, name).group(0)
@@ -3941,7 +3949,11 @@ Example, "CH3COO-" becomes "CH<sub>3</sub>COO<sup>-</sup>"</p>
            &#34;5&#34;: &#34;&lt;sub&gt;5&lt;/sub&gt;&#34;, &#34;6&#34;: &#34;&lt;sub&gt;6&lt;/sub&gt;&#34;, &#34;7&#34;: &#34;&lt;sub&gt;7&lt;/sub&gt;&#34;, &#34;8&#34;: &#34;&lt;sub&gt;8&lt;/sub&gt;&#34;, &#34;9&#34;: &#34;&lt;sub&gt;9&lt;/sub&gt;&#34;,
            &#34;.&#34;:&#34;&lt;sub&gt;.&lt;/sub&gt;&#34;}
     name_no_charge_formatted = &#34;&#34;.join([mapping.get(x) or x for x in list(name_no_charge)])
-    name = re.sub(name_no_charge, name_no_charge_formatted, name)
+    
+    try:
+        name = re.sub(name_no_charge, name_no_charge_formatted, name)
+    except:
+        pass
 
     return(name)</code></pre>
 </details>
@@ -4805,7 +4817,7 @@ number of decimal places in logK, with a maximum default tolerance of
     &#34;&#34;&#34;
 
     if tol == None:
-        d = decimal.Decimal(str(this_logK))
+        d = decimal.Decimal(str(logK))
         n_decimals = abs(d.as_tuple().exponent)
         tol = float(&#34;0.&#34;+&#34;&#34;.join(n_decimals*[&#34;0&#34;])+&#34;01&#34;)
         if tol &gt; 0.00001:
@@ -4849,7 +4861,8 @@ number of decimal places in logK, with a maximum default tolerance of
                                temperatures=temperatures,
                                IS=IS,
                                minP=minP,
-                               maxP=maxP)
+                               maxP=maxP,
+                               tol=tol)
             if plot_it:
                 with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
                     ro.r.create_output_plot_P(logK=logK,
@@ -4858,8 +4871,7 @@ number of decimal places in logK, with a maximum default tolerance of
                                               coeff=coeff,
                                               temperatures=temperatures,
                                               minP=minP,
-                                              maxP=maxP,
-                                              tol=tol)
+                                              maxP=maxP)
     if messages:
         for warning in w:
             print(warning.message)
