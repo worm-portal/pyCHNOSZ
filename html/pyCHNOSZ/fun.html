@@ -39,6 +39,7 @@ import copy
 import statistics
 import pkg_resources
 import decimal
+import chemparse
 
 with warnings.catch_warnings():
     warnings.simplefilter(&#34;ignore&#34;)
@@ -118,19 +119,20 @@ def html_chemname_format(name):
     
     p = re.compile(r&#39;(?P&lt;sp&gt;[-+]\d*?$)&#39;)
     name = p.sub(r&#39;&lt;sup&gt;\g&lt;sp&gt;&lt;/sup&gt;&#39;, name)
-    
+    charge = re.search(r&#39;&lt;.*$&#39;, name)
+
     name_no_charge = re.match(r&#39;(?:(?!&lt;|$).)*&#39;, name).group(0)
     mapping = {&#34;0&#34;: &#34;&lt;sub&gt;0&lt;/sub&gt;&#34;, &#34;1&#34;: &#34;&lt;sub&gt;1&lt;/sub&gt;&#34;, &#34;2&#34;: &#34;&lt;sub&gt;2&lt;/sub&gt;&#34;, &#34;3&#34;: &#34;&lt;sub&gt;3&lt;/sub&gt;&#34;, &#34;4&#34;: &#34;&lt;sub&gt;4&lt;/sub&gt;&#34;, 
            &#34;5&#34;: &#34;&lt;sub&gt;5&lt;/sub&gt;&#34;, &#34;6&#34;: &#34;&lt;sub&gt;6&lt;/sub&gt;&#34;, &#34;7&#34;: &#34;&lt;sub&gt;7&lt;/sub&gt;&#34;, &#34;8&#34;: &#34;&lt;sub&gt;8&lt;/sub&gt;&#34;, &#34;9&#34;: &#34;&lt;sub&gt;9&lt;/sub&gt;&#34;,
            &#34;.&#34;:&#34;&lt;sub&gt;.&lt;/sub&gt;&#34;}
     name_no_charge_formatted = &#34;&#34;.join([mapping.get(x) or x for x in list(name_no_charge)])
-    
-    try:
-        name = re.sub(name_no_charge, name_no_charge_formatted, name)
-    except:
-        pass
 
-    return(name)
+    if charge != None:
+        name = name_no_charge_formatted + charge.group(0)
+    else:
+        name = name_no_charge_formatted
+
+    return name
 
 
 def __seq(start, end, by=None, length_out=None):
@@ -252,8 +254,8 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     
     basis_sp = basis_args[&#34;species&#34;]
     sp = species_args[&#34;species&#34;]
-    basis(**basis_args)
-    species(**species_args)
+    basis_out = basis(**basis_args)
+    species_out = species(**species_args)
 
     dfs = []
     dmaps = []
@@ -277,8 +279,13 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     diagram_args[&#34;interactive&#34;] = True
     
     for z in zvals:
-
-        affinity_args[anim_var] = z
+        
+        if anim_var in basis_out.index:
+            basis(anim_var, z)
+        elif anim_var in list(species_out[&#34;name&#34;]):
+            species(anim_var, z)
+        else:
+            affinity_args[anim_var] = z
 
         aeout = affinity(**affinity_args)
         if equilibrate_args != None:
@@ -346,6 +353,11 @@ def animation(basis_args={}, species_args={}, affinity_args={},
                       width=500,  height=400, animation_frame=anim_var,
                       labels=dict(value=yvar, x=xvar),
                      )
+        
+        if &#39;main&#39; in diagram_args.keys():
+            fig.update_layout(title={&#39;text&#39;:diagram_args[&#34;main&#34;], &#39;x&#39;:0.5, &#39;xanchor&#39;:&#39;center&#39;})
+        
+        fig.update_layout(legend_title=None)
 
         config = {&#39;displaylogo&#39;: False,
                   &#39;modeBarButtonsToRemove&#39;: [&#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;]}
@@ -357,6 +369,9 @@ def animation(basis_args={}, species_args={}, affinity_args={},
         yvals = __seq(yrange[0], yrange[1], length_out=yres)
 
     unit_dict = {&#34;P&#34;:&#34;bar&#34;, &#34;T&#34;:&#34;°C&#34;, &#34;pH&#34;:&#34;&#34;, &#34;Eh&#34;:&#34;volts&#34;, &#34;IS&#34;:&#34;mol/kg&#34;}
+    
+    if any([anim_var in basis_out.index, anim_var in list(species_out[&#34;name&#34;])]) and anim_var not in unit_dict.keys():
+        unit_dict[anim_var] = &#34;logact &#34;+anim_var
 
     for s in basis_sp:
         unit_dict[s] = &#34;logact &#34;+s
@@ -413,9 +428,25 @@ def animation(basis_args={}, species_args={}, affinity_args={},
                     showarrow=False,
                     )
             annotations_i.append(a)
+            
+        # allows adding a custom annotation; append to frame
+        if &#34;annotation&#34; in diagram_args.keys():
+            if &#34;annotation_coords&#34; not in diagram_args.keys():
+                diagram_args[&#34;annotation_coords&#34;] = [0, 0]
+            custom_annotation = go.layout.Annotation(
+                    x=diagram_args[&#34;annotation_coords&#34;][0],
+                    y=diagram_args[&#34;annotation_coords&#34;][1],
+                    xref=&#34;paper&#34;,
+                    yref=&#34;paper&#34;,
+                    text=diagram_args[&#34;annotation&#34;],
+                    bgcolor=&#34;rgba(255, 255, 255, 0.5)&#34;,
+                    showarrow=False,
+                    )
+            annotations_i.append(custom_annotation)
+    
         annotations.append(annotations_i)
 
-        heatmaps_i = go.Heatmap(z=dmaps[i], x=xvals, y=yvals, zmin=0, zmax=len(sp)-1, # is this zmax valid? Double check.
+        heatmaps_i = go.Heatmap(z=dmaps[i], x=xvals, y=yvals, zmin=0, zmax=len(sp)-1,
                                 customdata=dmaps_names[i],
                                 hovertemplate=xvar+&#39;: %{x} &#39;+unit_dict[xvar]+&#39;&lt;br&gt;&#39;+yvar+&#39;: %{y} &#39;+unit_dict[yvar]+&#39;&lt;br&gt;Region: %{customdata}&lt;extra&gt;&lt;/extra&gt;&#39;)
 
@@ -423,8 +454,7 @@ def animation(basis_args={}, species_args={}, affinity_args={},
         
         frame = go.Frame(data=[heatmaps_i],
                          name=str(i),
-                         layout=go.Layout(annotations=annotations_i,
-                                          coloraxis={&#39;colorscale&#39;:[&#34;green&#34;, &#34;blue&#34;, &#34;red&#34;, &#34;yellow&#34;, &#34;orange&#34;, &#34;brown&#34;]}))
+                         layout=go.Layout(annotations=annotations_i))
 
         frames.append(frame)
 
@@ -499,16 +529,30 @@ def animation(basis_args={}, species_args={}, affinity_args={},
                       selector={&#39;type&#39;:&#39;heatmap&#39;})
 
 
-
+    if &#39;ylab&#39; in diagram_args.keys():
+        ylab = diagram_args[&#34;ylab&#34;]
+    else:
+        ylab = html_chemname_format(ylab)
+        
+    if &#39;xlab&#39; in diagram_args.keys():
+        xlab = diagram_args[&#34;xlab&#34;]
+    else:
+        xlab = html_chemname_format(xlab)
+    
     fig.update_layout(
-        xaxis_title=html_chemname_format(xlab),
-        yaxis_title=html_chemname_format(ylab),
+        xaxis_title=xlab,
+        yaxis_title=ylab,
+        xaxis={&#34;range&#34;:[list(dfs[0][xvar])[0], list(dfs[0][xvar])[-1]]},
+        yaxis={&#34;range&#34;:[list(dfs[0][yvar])[0], list(dfs[0][yvar])[-1]]},
         margin={&#34;t&#34;: 40, &#34;r&#34;:60},
     )
 
+    if &#39;main&#39; in diagram_args.keys():
+        fig.update_layout(title={&#39;text&#39;:diagram_args[&#39;main&#39;], &#39;x&#39;:0.5, &#39;xanchor&#39;:&#39;center&#39;})
+
     config = {&#39;displaylogo&#39;: False,
               &#39;modeBarButtonsToRemove&#39;: [&#39;zoom2d&#39;, &#39;pan2d&#39;, &#39;zoomIn2d&#39;, &#39;zoomOut2d&#39;,
-                                         &#39;autoScale2d&#39;, &#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;,
+                                         &#39;autoScale2d&#39;, &#39;toggleSpikelines&#39;,
                                          &#39;hoverClosestCartesian&#39;, &#39;hoverCompareCartesian&#39;]}
 
     fig.show(config=config)
@@ -648,7 +692,7 @@ def diagram_interactive(data, title=None,
         
         fig.update_layout(xaxis_title=xlab,
                           yaxis_title=ylab,
-                          )
+                          legend_title=None)
         
         if isinstance(title, str):
             fig.update_layout(title={&#39;text&#39;:title, &#39;x&#39;:0.5, &#39;xanchor&#39;:&#39;center&#39;})
@@ -2351,7 +2395,92 @@ def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
     if plot_it:
         fig.show(config=config)
     
-    return output</code></pre>
+    return output
+
+
+def syslab(system=[&#34;K2O&#34;, &#34;Al2O3&#34;, &#34;SiO2&#34;, &#34;H2O&#34;], dash=&#34;-&#34;):
+
+    &#34;&#34;&#34;
+    Python wrapper for the syslab() function in CHNOSZ.
+    Formats the given thermodynamic components and adds intervening en dashes.
+    
+    Parameters
+    ----------
+    system : list of str, default [&#34;K2O&#34;, &#34;Al2O3&#34;, &#34;SiO2&#34;, &#34;H2O&#34;]
+        Thermodynamic components.
+    
+    dash : str, default &#34;-&#34;
+        Character to use for dash between components.
+
+    Returns
+    -------
+    A formatted string representing the thermodynamic system.
+    &#34;&#34;&#34;
+    
+    return dash.join([html_chemname_format(sp)for sp in system])
+
+
+def ratlab(top=&#34;K+&#34;, bottom=&#34;H+&#34;, molality=False):
+    
+    &#34;&#34;&#34;
+    Python wrapper for the ratlab() function in CHNOSZ.
+    Produces a expression for the activity ratio between the ions in the top and
+    bottom arguments. The default is a ratio with H+, i.e.
+    (activity of the ion) / [(activity of H+) ^ (charge of the ion)]
+    
+    Parameters
+    ----------
+    top : str, default &#34;K+&#34;
+        The ion in the numerator of the ratio.
+    
+    bottom : str, default &#34;H+&#34;
+        The ion in the denominator of the ratio.
+    
+    molality : bool, default False
+        Use molality (m) instead of activity (a) for aqueous species?
+
+    Returns
+    -------
+    A formatted string representing the activity ratio.
+    &#34;&#34;&#34;
+    
+    top_formula = chemparse.parse_formula(top)
+    if &#34;+&#34; in top_formula.keys():
+        top_charge = top_formula[&#34;+&#34;]
+    elif &#34;-&#34; in top_formula.keys():
+        top_charge = top_formula[&#34;-&#34;]
+    else:
+        raise Exception(&#34;Cannot create an ion ratio involving one or more neutral species.&#34;)
+    
+    bottom_formula = chemparse.parse_formula(bottom)
+    if &#34;+&#34; in bottom_formula.keys():
+        bottom_charge = bottom_formula[&#34;+&#34;]
+    elif &#34;-&#34; in bottom_formula.keys():
+        top_charge = bottom_formula[&#34;-&#34;]
+    else:
+        raise Exception(&#34;Cannot create an ion ratio involving one or more neutral species.&#34;)
+    
+    if top_charge.is_integer():
+        top_charge = int(top_charge)
+
+    if bottom_charge.is_integer():
+        bottom_charge = int(bottom_charge)
+    
+    if top_charge != 1:
+        top_charge = &#34;&lt;sup&gt;&#34;+str(top_charge)+&#34;&lt;/sup&gt;&#34;
+    else:
+        top_charge = &#34;&#34;
+    if bottom_charge != 1:
+        bottom_charge = &#34;&lt;sup&gt;&#34;+str(bottom_charge)+&#34;&lt;/sup&gt;&#34;
+    else:
+        bottom_charge = &#34;&#34;
+    
+    if molality:
+        sym = &#34;m&#34;
+    else:
+        sym = &#34;a&#34;
+        
+    return &#34;log(&#34;+sym+bottom_charge+&#34;&lt;sub&gt;&#34;+html_chemname_format(top)+&#34;&lt;/sub&gt;/&#34;+sym+top_charge+&#34;&lt;sub&gt;&#34;+html_chemname_format(bottom)+&#34;&lt;/sub&gt;)&#34;</code></pre>
 </details>
 </section>
 <section>
@@ -2758,8 +2887,8 @@ number of animation frames.</dd>
     
     basis_sp = basis_args[&#34;species&#34;]
     sp = species_args[&#34;species&#34;]
-    basis(**basis_args)
-    species(**species_args)
+    basis_out = basis(**basis_args)
+    species_out = species(**species_args)
 
     dfs = []
     dmaps = []
@@ -2783,8 +2912,13 @@ number of animation frames.</dd>
     diagram_args[&#34;interactive&#34;] = True
     
     for z in zvals:
-
-        affinity_args[anim_var] = z
+        
+        if anim_var in basis_out.index:
+            basis(anim_var, z)
+        elif anim_var in list(species_out[&#34;name&#34;]):
+            species(anim_var, z)
+        else:
+            affinity_args[anim_var] = z
 
         aeout = affinity(**affinity_args)
         if equilibrate_args != None:
@@ -2852,6 +2986,11 @@ number of animation frames.</dd>
                       width=500,  height=400, animation_frame=anim_var,
                       labels=dict(value=yvar, x=xvar),
                      )
+        
+        if &#39;main&#39; in diagram_args.keys():
+            fig.update_layout(title={&#39;text&#39;:diagram_args[&#34;main&#34;], &#39;x&#39;:0.5, &#39;xanchor&#39;:&#39;center&#39;})
+        
+        fig.update_layout(legend_title=None)
 
         config = {&#39;displaylogo&#39;: False,
                   &#39;modeBarButtonsToRemove&#39;: [&#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;]}
@@ -2863,6 +3002,9 @@ number of animation frames.</dd>
         yvals = __seq(yrange[0], yrange[1], length_out=yres)
 
     unit_dict = {&#34;P&#34;:&#34;bar&#34;, &#34;T&#34;:&#34;°C&#34;, &#34;pH&#34;:&#34;&#34;, &#34;Eh&#34;:&#34;volts&#34;, &#34;IS&#34;:&#34;mol/kg&#34;}
+    
+    if any([anim_var in basis_out.index, anim_var in list(species_out[&#34;name&#34;])]) and anim_var not in unit_dict.keys():
+        unit_dict[anim_var] = &#34;logact &#34;+anim_var
 
     for s in basis_sp:
         unit_dict[s] = &#34;logact &#34;+s
@@ -2919,9 +3061,25 @@ number of animation frames.</dd>
                     showarrow=False,
                     )
             annotations_i.append(a)
+            
+        # allows adding a custom annotation; append to frame
+        if &#34;annotation&#34; in diagram_args.keys():
+            if &#34;annotation_coords&#34; not in diagram_args.keys():
+                diagram_args[&#34;annotation_coords&#34;] = [0, 0]
+            custom_annotation = go.layout.Annotation(
+                    x=diagram_args[&#34;annotation_coords&#34;][0],
+                    y=diagram_args[&#34;annotation_coords&#34;][1],
+                    xref=&#34;paper&#34;,
+                    yref=&#34;paper&#34;,
+                    text=diagram_args[&#34;annotation&#34;],
+                    bgcolor=&#34;rgba(255, 255, 255, 0.5)&#34;,
+                    showarrow=False,
+                    )
+            annotations_i.append(custom_annotation)
+    
         annotations.append(annotations_i)
 
-        heatmaps_i = go.Heatmap(z=dmaps[i], x=xvals, y=yvals, zmin=0, zmax=len(sp)-1, # is this zmax valid? Double check.
+        heatmaps_i = go.Heatmap(z=dmaps[i], x=xvals, y=yvals, zmin=0, zmax=len(sp)-1,
                                 customdata=dmaps_names[i],
                                 hovertemplate=xvar+&#39;: %{x} &#39;+unit_dict[xvar]+&#39;&lt;br&gt;&#39;+yvar+&#39;: %{y} &#39;+unit_dict[yvar]+&#39;&lt;br&gt;Region: %{customdata}&lt;extra&gt;&lt;/extra&gt;&#39;)
 
@@ -2929,8 +3087,7 @@ number of animation frames.</dd>
         
         frame = go.Frame(data=[heatmaps_i],
                          name=str(i),
-                         layout=go.Layout(annotations=annotations_i,
-                                          coloraxis={&#39;colorscale&#39;:[&#34;green&#34;, &#34;blue&#34;, &#34;red&#34;, &#34;yellow&#34;, &#34;orange&#34;, &#34;brown&#34;]}))
+                         layout=go.Layout(annotations=annotations_i))
 
         frames.append(frame)
 
@@ -3005,16 +3162,30 @@ number of animation frames.</dd>
                       selector={&#39;type&#39;:&#39;heatmap&#39;})
 
 
-
+    if &#39;ylab&#39; in diagram_args.keys():
+        ylab = diagram_args[&#34;ylab&#34;]
+    else:
+        ylab = html_chemname_format(ylab)
+        
+    if &#39;xlab&#39; in diagram_args.keys():
+        xlab = diagram_args[&#34;xlab&#34;]
+    else:
+        xlab = html_chemname_format(xlab)
+    
     fig.update_layout(
-        xaxis_title=html_chemname_format(xlab),
-        yaxis_title=html_chemname_format(ylab),
+        xaxis_title=xlab,
+        yaxis_title=ylab,
+        xaxis={&#34;range&#34;:[list(dfs[0][xvar])[0], list(dfs[0][xvar])[-1]]},
+        yaxis={&#34;range&#34;:[list(dfs[0][yvar])[0], list(dfs[0][yvar])[-1]]},
         margin={&#34;t&#34;: 40, &#34;r&#34;:60},
     )
 
+    if &#39;main&#39; in diagram_args.keys():
+        fig.update_layout(title={&#39;text&#39;:diagram_args[&#39;main&#39;], &#39;x&#39;:0.5, &#39;xanchor&#39;:&#39;center&#39;})
+
     config = {&#39;displaylogo&#39;: False,
               &#39;modeBarButtonsToRemove&#39;: [&#39;zoom2d&#39;, &#39;pan2d&#39;, &#39;zoomIn2d&#39;, &#39;zoomOut2d&#39;,
-                                         &#39;autoScale2d&#39;, &#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;,
+                                         &#39;autoScale2d&#39;, &#39;toggleSpikelines&#39;,
                                          &#39;hoverClosestCartesian&#39;, &#39;hoverCompareCartesian&#39;]}
 
     fig.show(config=config)</code></pre>
@@ -3681,7 +3852,7 @@ activities?</dd>
         
         fig.update_layout(xaxis_title=xlab,
                           yaxis_title=ylab,
-                          )
+                          legend_title=None)
         
         if isinstance(title, str):
             fig.update_layout(title={&#39;text&#39;:title, &#39;x&#39;:0.5, &#39;xanchor&#39;:&#39;center&#39;})
@@ -3943,19 +4114,20 @@ Example, "CH3COO-" becomes "CH<sub>3</sub>COO<sup>-</sup>"</p>
     
     p = re.compile(r&#39;(?P&lt;sp&gt;[-+]\d*?$)&#39;)
     name = p.sub(r&#39;&lt;sup&gt;\g&lt;sp&gt;&lt;/sup&gt;&#39;, name)
-    
+    charge = re.search(r&#39;&lt;.*$&#39;, name)
+
     name_no_charge = re.match(r&#39;(?:(?!&lt;|$).)*&#39;, name).group(0)
     mapping = {&#34;0&#34;: &#34;&lt;sub&gt;0&lt;/sub&gt;&#34;, &#34;1&#34;: &#34;&lt;sub&gt;1&lt;/sub&gt;&#34;, &#34;2&#34;: &#34;&lt;sub&gt;2&lt;/sub&gt;&#34;, &#34;3&#34;: &#34;&lt;sub&gt;3&lt;/sub&gt;&#34;, &#34;4&#34;: &#34;&lt;sub&gt;4&lt;/sub&gt;&#34;, 
            &#34;5&#34;: &#34;&lt;sub&gt;5&lt;/sub&gt;&#34;, &#34;6&#34;: &#34;&lt;sub&gt;6&lt;/sub&gt;&#34;, &#34;7&#34;: &#34;&lt;sub&gt;7&lt;/sub&gt;&#34;, &#34;8&#34;: &#34;&lt;sub&gt;8&lt;/sub&gt;&#34;, &#34;9&#34;: &#34;&lt;sub&gt;9&lt;/sub&gt;&#34;,
            &#34;.&#34;:&#34;&lt;sub&gt;.&lt;/sub&gt;&#34;}
     name_no_charge_formatted = &#34;&#34;.join([mapping.get(x) or x for x in list(name_no_charge)])
-    
-    try:
-        name = re.sub(name_no_charge, name_no_charge_formatted, name)
-    except:
-        pass
 
-    return(name)</code></pre>
+    if charge != None:
+        name = name_no_charge_formatted + charge.group(0)
+    else:
+        name = name_no_charge_formatted
+
+    return name</code></pre>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.info"><code class="name flex">
@@ -4282,6 +4454,92 @@ modified.</dd>
             print(warning.message)
     
     return list(ispecies)</code></pre>
+</details>
+</dd>
+<dt id="pyCHNOSZ.fun.ratlab"><code class="name flex">
+<span>def <span class="ident">ratlab</span></span>(<span>top='K+', bottom='H+', molality=False)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Python wrapper for the ratlab() function in CHNOSZ.
+Produces a expression for the activity ratio between the ions in the top and
+bottom arguments. The default is a ratio with H+, i.e.
+(activity of the ion) / [(activity of H+) ^ (charge of the ion)]</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>top</code></strong> :&ensp;<code>str</code>, default <code>"K+"</code></dt>
+<dd>The ion in the numerator of the ratio.</dd>
+<dt><strong><code>bottom</code></strong> :&ensp;<code>str</code>, default <code>"H+"</code></dt>
+<dd>The ion in the denominator of the ratio.</dd>
+<dt><strong><code>molality</code></strong> :&ensp;<code>bool</code>, default <code>False</code></dt>
+<dd>Use molality (m) instead of activity (a) for aqueous species?</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>A formatted string representing the activity ratio.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def ratlab(top=&#34;K+&#34;, bottom=&#34;H+&#34;, molality=False):
+    
+    &#34;&#34;&#34;
+    Python wrapper for the ratlab() function in CHNOSZ.
+    Produces a expression for the activity ratio between the ions in the top and
+    bottom arguments. The default is a ratio with H+, i.e.
+    (activity of the ion) / [(activity of H+) ^ (charge of the ion)]
+    
+    Parameters
+    ----------
+    top : str, default &#34;K+&#34;
+        The ion in the numerator of the ratio.
+    
+    bottom : str, default &#34;H+&#34;
+        The ion in the denominator of the ratio.
+    
+    molality : bool, default False
+        Use molality (m) instead of activity (a) for aqueous species?
+
+    Returns
+    -------
+    A formatted string representing the activity ratio.
+    &#34;&#34;&#34;
+    
+    top_formula = chemparse.parse_formula(top)
+    if &#34;+&#34; in top_formula.keys():
+        top_charge = top_formula[&#34;+&#34;]
+    elif &#34;-&#34; in top_formula.keys():
+        top_charge = top_formula[&#34;-&#34;]
+    else:
+        raise Exception(&#34;Cannot create an ion ratio involving one or more neutral species.&#34;)
+    
+    bottom_formula = chemparse.parse_formula(bottom)
+    if &#34;+&#34; in bottom_formula.keys():
+        bottom_charge = bottom_formula[&#34;+&#34;]
+    elif &#34;-&#34; in bottom_formula.keys():
+        top_charge = bottom_formula[&#34;-&#34;]
+    else:
+        raise Exception(&#34;Cannot create an ion ratio involving one or more neutral species.&#34;)
+    
+    if top_charge.is_integer():
+        top_charge = int(top_charge)
+
+    if bottom_charge.is_integer():
+        bottom_charge = int(bottom_charge)
+    
+    if top_charge != 1:
+        top_charge = &#34;&lt;sup&gt;&#34;+str(top_charge)+&#34;&lt;/sup&gt;&#34;
+    else:
+        top_charge = &#34;&#34;
+    if bottom_charge != 1:
+        bottom_charge = &#34;&lt;sup&gt;&#34;+str(bottom_charge)+&#34;&lt;/sup&gt;&#34;
+    else:
+        bottom_charge = &#34;&#34;
+    
+    if molality:
+        sym = &#34;m&#34;
+    else:
+        sym = &#34;a&#34;
+        
+    return &#34;log(&#34;+sym+bottom_charge+&#34;&lt;sub&gt;&#34;+html_chemname_format(top)+&#34;&lt;/sub&gt;/&#34;+sym+top_charge+&#34;&lt;sub&gt;&#34;+html_chemname_format(bottom)+&#34;&lt;/sub&gt;)&#34;</code></pre>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.reset"><code class="name flex">
@@ -4679,6 +4937,47 @@ mol kg^-1.</dd>
                     display(out[table][subtable])
     
     return out</code></pre>
+</details>
+</dd>
+<dt id="pyCHNOSZ.fun.syslab"><code class="name flex">
+<span>def <span class="ident">syslab</span></span>(<span>system=['K2O', 'Al2O3', 'SiO2', 'H2O'], dash='-')</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Python wrapper for the syslab() function in CHNOSZ.
+Formats the given thermodynamic components and adds intervening en dashes.</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>system</code></strong> :&ensp;<code>list</code> of <code>str</code>, default <code>["K2O", "Al2O3", "SiO2", "H2O"]</code></dt>
+<dd>Thermodynamic components.</dd>
+<dt><strong><code>dash</code></strong> :&ensp;<code>str</code>, default <code>"-"</code></dt>
+<dd>Character to use for dash between components.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>A formatted string representing the thermodynamic system.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def syslab(system=[&#34;K2O&#34;, &#34;Al2O3&#34;, &#34;SiO2&#34;, &#34;H2O&#34;], dash=&#34;-&#34;):
+
+    &#34;&#34;&#34;
+    Python wrapper for the syslab() function in CHNOSZ.
+    Formats the given thermodynamic components and adds intervening en dashes.
+    
+    Parameters
+    ----------
+    system : list of str, default [&#34;K2O&#34;, &#34;Al2O3&#34;, &#34;SiO2&#34;, &#34;H2O&#34;]
+        Thermodynamic components.
+    
+    dash : str, default &#34;-&#34;
+        Character to use for dash between components.
+
+    Returns
+    -------
+    A formatted string representing the thermodynamic system.
+    &#34;&#34;&#34;
+    
+    return dash.join([html_chemname_format(sp)for sp in system])</code></pre>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.unicurve"><code class="name flex">
@@ -5479,10 +5778,12 @@ define the species of interest.</dd>
 <li><code><a title="pyCHNOSZ.fun.makeup" href="#pyCHNOSZ.fun.makeup">makeup</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.mass" href="#pyCHNOSZ.fun.mass">mass</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.mod_OBIGT" href="#pyCHNOSZ.fun.mod_OBIGT">mod_OBIGT</a></code></li>
+<li><code><a title="pyCHNOSZ.fun.ratlab" href="#pyCHNOSZ.fun.ratlab">ratlab</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.reset" href="#pyCHNOSZ.fun.reset">reset</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.seq2aa" href="#pyCHNOSZ.fun.seq2aa">seq2aa</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.species" href="#pyCHNOSZ.fun.species">species</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.subcrt" href="#pyCHNOSZ.fun.subcrt">subcrt</a></code></li>
+<li><code><a title="pyCHNOSZ.fun.syslab" href="#pyCHNOSZ.fun.syslab">syslab</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.unicurve" href="#pyCHNOSZ.fun.unicurve">unicurve</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.univariant_TP" href="#pyCHNOSZ.fun.univariant_TP">univariant_TP</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.water" href="#pyCHNOSZ.fun.water">water</a></code></li>

@@ -11,6 +11,7 @@ import copy
 import statistics
 import pkg_resources
 import decimal
+import chemparse
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -90,19 +91,20 @@ def html_chemname_format(name):
     
     p = re.compile(r'(?P<sp>[-+]\d*?$)')
     name = p.sub(r'<sup>\g<sp></sup>', name)
-    
+    charge = re.search(r'<.*$', name)
+
     name_no_charge = re.match(r'(?:(?!<|$).)*', name).group(0)
     mapping = {"0": "<sub>0</sub>", "1": "<sub>1</sub>", "2": "<sub>2</sub>", "3": "<sub>3</sub>", "4": "<sub>4</sub>", 
            "5": "<sub>5</sub>", "6": "<sub>6</sub>", "7": "<sub>7</sub>", "8": "<sub>8</sub>", "9": "<sub>9</sub>",
            ".":"<sub>.</sub>"}
     name_no_charge_formatted = "".join([mapping.get(x) or x for x in list(name_no_charge)])
-    
-    try:
-        name = re.sub(name_no_charge, name_no_charge_formatted, name)
-    except:
-        pass
 
-    return(name)
+    if charge != None:
+        name = name_no_charge_formatted + charge.group(0)
+    else:
+        name = name_no_charge_formatted
+
+    return name
 
 
 def __seq(start, end, by=None, length_out=None):
@@ -224,8 +226,8 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     
     basis_sp = basis_args["species"]
     sp = species_args["species"]
-    basis(**basis_args)
-    species(**species_args)
+    basis_out = basis(**basis_args)
+    species_out = species(**species_args)
 
     dfs = []
     dmaps = []
@@ -249,8 +251,13 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     diagram_args["interactive"] = True
     
     for z in zvals:
-
-        affinity_args[anim_var] = z
+        
+        if anim_var in basis_out.index:
+            basis(anim_var, z)
+        elif anim_var in list(species_out["name"]):
+            species(anim_var, z)
+        else:
+            affinity_args[anim_var] = z
 
         aeout = affinity(**affinity_args)
         if equilibrate_args != None:
@@ -318,6 +325,11 @@ def animation(basis_args={}, species_args={}, affinity_args={},
                       width=500,  height=400, animation_frame=anim_var,
                       labels=dict(value=yvar, x=xvar),
                      )
+        
+        if 'main' in diagram_args.keys():
+            fig.update_layout(title={'text':diagram_args["main"], 'x':0.5, 'xanchor':'center'})
+        
+        fig.update_layout(legend_title=None)
 
         config = {'displaylogo': False,
                   'modeBarButtonsToRemove': ['resetScale2d', 'toggleSpikelines']}
@@ -329,6 +341,9 @@ def animation(basis_args={}, species_args={}, affinity_args={},
         yvals = __seq(yrange[0], yrange[1], length_out=yres)
 
     unit_dict = {"P":"bar", "T":"°C", "pH":"", "Eh":"volts", "IS":"mol/kg"}
+    
+    if any([anim_var in basis_out.index, anim_var in list(species_out["name"])]) and anim_var not in unit_dict.keys():
+        unit_dict[anim_var] = "logact "+anim_var
 
     for s in basis_sp:
         unit_dict[s] = "logact "+s
@@ -385,9 +400,25 @@ def animation(basis_args={}, species_args={}, affinity_args={},
                     showarrow=False,
                     )
             annotations_i.append(a)
+            
+        # allows adding a custom annotation; append to frame
+        if "annotation" in diagram_args.keys():
+            if "annotation_coords" not in diagram_args.keys():
+                diagram_args["annotation_coords"] = [0, 0]
+            custom_annotation = go.layout.Annotation(
+                    x=diagram_args["annotation_coords"][0],
+                    y=diagram_args["annotation_coords"][1],
+                    xref="paper",
+                    yref="paper",
+                    text=diagram_args["annotation"],
+                    bgcolor="rgba(255, 255, 255, 0.5)",
+                    showarrow=False,
+                    )
+            annotations_i.append(custom_annotation)
+    
         annotations.append(annotations_i)
 
-        heatmaps_i = go.Heatmap(z=dmaps[i], x=xvals, y=yvals, zmin=0, zmax=len(sp)-1, # is this zmax valid? Double check.
+        heatmaps_i = go.Heatmap(z=dmaps[i], x=xvals, y=yvals, zmin=0, zmax=len(sp)-1,
                                 customdata=dmaps_names[i],
                                 hovertemplate=xvar+': %{x} '+unit_dict[xvar]+'<br>'+yvar+': %{y} '+unit_dict[yvar]+'<br>Region: %{customdata}<extra></extra>')
 
@@ -395,8 +426,7 @@ def animation(basis_args={}, species_args={}, affinity_args={},
         
         frame = go.Frame(data=[heatmaps_i],
                          name=str(i),
-                         layout=go.Layout(annotations=annotations_i,
-                                          coloraxis={'colorscale':["green", "blue", "red", "yellow", "orange", "brown"]}))
+                         layout=go.Layout(annotations=annotations_i))
 
         frames.append(frame)
 
@@ -471,16 +501,30 @@ def animation(basis_args={}, species_args={}, affinity_args={},
                       selector={'type':'heatmap'})
 
 
-
+    if 'ylab' in diagram_args.keys():
+        ylab = diagram_args["ylab"]
+    else:
+        ylab = html_chemname_format(ylab)
+        
+    if 'xlab' in diagram_args.keys():
+        xlab = diagram_args["xlab"]
+    else:
+        xlab = html_chemname_format(xlab)
+    
     fig.update_layout(
-        xaxis_title=html_chemname_format(xlab),
-        yaxis_title=html_chemname_format(ylab),
+        xaxis_title=xlab,
+        yaxis_title=ylab,
+        xaxis={"range":[list(dfs[0][xvar])[0], list(dfs[0][xvar])[-1]]},
+        yaxis={"range":[list(dfs[0][yvar])[0], list(dfs[0][yvar])[-1]]},
         margin={"t": 40, "r":60},
     )
 
+    if 'main' in diagram_args.keys():
+        fig.update_layout(title={'text':diagram_args['main'], 'x':0.5, 'xanchor':'center'})
+
     config = {'displaylogo': False,
               'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'zoomIn2d', 'zoomOut2d',
-                                         'autoScale2d', 'resetScale2d', 'toggleSpikelines',
+                                         'autoScale2d', 'toggleSpikelines',
                                          'hoverClosestCartesian', 'hoverCompareCartesian']}
 
     fig.show(config=config)
@@ -620,7 +664,7 @@ def diagram_interactive(data, title=None,
         
         fig.update_layout(xaxis_title=xlab,
                           yaxis_title=ylab,
-                          )
+                          legend_title=None)
         
         if isinstance(title, str):
             fig.update_layout(title={'text':title, 'x':0.5, 'xanchor':'center'})
@@ -2324,3 +2368,88 @@ def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
         fig.show(config=config)
     
     return output
+
+
+def syslab(system=["K2O", "Al2O3", "SiO2", "H2O"], dash="-"):
+
+    """
+    Python wrapper for the syslab() function in CHNOSZ.
+    Formats the given thermodynamic components and adds intervening en dashes.
+    
+    Parameters
+    ----------
+    system : list of str, default ["K2O", "Al2O3", "SiO2", "H2O"]
+        Thermodynamic components.
+    
+    dash : str, default "-"
+        Character to use for dash between components.
+
+    Returns
+    -------
+    A formatted string representing the thermodynamic system.
+    """
+    
+    return dash.join([html_chemname_format(sp)for sp in system])
+
+
+def ratlab(top="K+", bottom="H+", molality=False):
+    
+    """
+    Python wrapper for the ratlab() function in CHNOSZ.
+    Produces a expression for the activity ratio between the ions in the top and
+    bottom arguments. The default is a ratio with H+, i.e.
+    (activity of the ion) / [(activity of H+) ^ (charge of the ion)]
+    
+    Parameters
+    ----------
+    top : str, default "K+"
+        The ion in the numerator of the ratio.
+    
+    bottom : str, default "H+"
+        The ion in the denominator of the ratio.
+    
+    molality : bool, default False
+        Use molality (m) instead of activity (a) for aqueous species?
+
+    Returns
+    -------
+    A formatted string representing the activity ratio.
+    """
+    
+    top_formula = chemparse.parse_formula(top)
+    if "+" in top_formula.keys():
+        top_charge = top_formula["+"]
+    elif "-" in top_formula.keys():
+        top_charge = top_formula["-"]
+    else:
+        raise Exception("Cannot create an ion ratio involving one or more neutral species.")
+    
+    bottom_formula = chemparse.parse_formula(bottom)
+    if "+" in bottom_formula.keys():
+        bottom_charge = bottom_formula["+"]
+    elif "-" in bottom_formula.keys():
+        top_charge = bottom_formula["-"]
+    else:
+        raise Exception("Cannot create an ion ratio involving one or more neutral species.")
+    
+    if top_charge.is_integer():
+        top_charge = int(top_charge)
+
+    if bottom_charge.is_integer():
+        bottom_charge = int(bottom_charge)
+    
+    if top_charge != 1:
+        top_charge = "<sup>"+str(top_charge)+"</sup>"
+    else:
+        top_charge = ""
+    if bottom_charge != 1:
+        bottom_charge = "<sup>"+str(bottom_charge)+"</sup>"
+    else:
+        bottom_charge = ""
+    
+    if molality:
+        sym = "m"
+    else:
+        sym = "a"
+        
+    return "log("+sym+bottom_charge+"<sub>"+html_chemname_format(top)+"</sub>/"+sym+top_charge+"<sub>"+html_chemname_format(bottom)+"</sub>)"
