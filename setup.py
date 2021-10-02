@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="pyCHNOSZ",
-    version="0.7.0",
+    version="0.7.1",
     author="Grayson Boyer",
     author_email="gmboyer@asu.edu",
     description="Python wrapper for the R package CHNOSZ.",
@@ -19,7 +19,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
-    install_requires=['rpy2', 'pandas', 'ipython', 'plotly', 'simplegeneric'],
+    install_requires=['rpy2', 'pandas', 'ipython', 'plotly', 'simplegeneric', 'chemparse'],
     package_data={'': ['*.r']},
     include_package_data=True,
     zip_safe=False

@@ -3,3 +3,4 @@ pandas
 ipython
 plotly
 simplegeneric
+chemparse

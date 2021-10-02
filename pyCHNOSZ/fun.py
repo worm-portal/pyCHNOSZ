@@ -7,6 +7,7 @@ import numpy as np
 import re
 import plotly.express as px
 import plotly.graph_objects as go
+import plotly.io as pio
 import copy
 import statistics
 import pkg_resources
@@ -70,6 +71,36 @@ def __flatten_list(_2d_list):
         else:
             flat_list.append(element)
     return flat_list
+
+
+def __save_figure(fig, save_as, save_format, save_scale, plot_width, plot_height, ppi):
+    
+    if isinstance(save_format, str) and save_format not in ['png', 'jpg', 'jpeg', 'webp', 'svg', 'pdf', 'eps', 'json', 'html']:
+        raise Exception("{}".format(save_format)+" is an unrecognized "
+                        "save format. Supported formats include 'png', "
+                        "'jpg', 'jpeg', 'webp', 'svg', 'pdf', 'eps', "
+                        "'json', or 'html'")
+
+    if isinstance(save_format, str):
+        if not isinstance(save_as, str):
+            save_as = "newplot"
+        if save_format=="html":
+            fig.write_html(save_as+".html")
+            print("Saved figure as {}".format(save_as)+".html")
+            save_format = 'png'
+        elif save_format in ['pdf', 'eps', 'json']:
+            pio.write_image(fig, save_as+"."+save_format, format=save_format, scale=save_scale,
+                            width=plot_width*ppi, height=plot_height*ppi)
+            print("Saved figure as {}".format(save_as)+"."+save_format)
+            save_format = "png"
+        else:
+            pio.write_image(fig, save_as+"."+save_format, format=save_format, scale=save_scale,
+                            width=plot_width*ppi, height=plot_height*ppi)
+            print("Saved figure as {}".format(save_as)+"."+save_format)
+    else:
+        save_format = "png"
+
+    return save_as, save_format
 
 
 def html_chemname_format(name):
@@ -140,6 +171,110 @@ def __seq(start, end, by=None, length_out=None):
     return out
 
 
+def retrieve(elements=None, ligands=None, state=None, T=None, P="Psat",
+             add_charge=True, hide_groups=True, messages=True):
+    """
+    Python wrapper for the retrieve() function in CHNOSZ.
+    Retrieve species in the database containing one or more chemical elements.
+    
+    Parameters
+    ----------
+    elements : str, list of str, or tuple of str
+        Elements in a chemical system. If `elements` is a string, retrieve
+        species containing that element.
+        
+        E.g., `retrieve("Au")` will return all species containing Au.
+        
+        If `elements` is a list, retrieve species that have all of the elements
+        in the list.
+        
+        E.g., `retrieve(["Au", "Cl"])` will return all species that have both
+        Au and Cl.
+        
+        If `elements` is a tuple, retrieve species relevant to the system,
+        including charged species.
+        
+        E.g., `retrieve(("Au", "Cl"))` will return species that have Au
+        and/or Cl, including charged species, but no other elements.
+    
+    ligands : str, list of str, or tuple of str, optional
+        Elements present in any ligands.
+        
+    state : str, list of str, or tuple of str, optional
+        Filter the result on these state(s).
+        
+    T : float, optional
+        Temperature where DeltaG0 of species must not be NA
+    
+    P : float or "Psat", default "Psat"
+        Pressure where DeltaG0 of species must not be NA
+    
+    add_charge : bool, default True
+        Add charge to the system?
+    
+    hide_groups : bool, default True
+        Exclude groups from the result?
+    
+    dict_output : bool, default False
+        give 
+
+    messages : bool, default True
+        Display messages from CHNOSZ?
+
+    Returns
+    ----------
+    out: list or dict
+        A list of the OBIGT indices of retrieved chemical species
+    """
+
+    if elements == None:
+        elements = ro.r("NULL")
+    elif isinstance(elements, list) or isinstance(elements, str):
+        elements = _convert_to_RVector(elements, force_Rvec=True)
+    elif isinstance(elements, tuple):
+        elements = ro.ListVector({chr(ord('`')+i):l for i,l in zip(range(1, len(elements)+1), elements)})
+    else:
+        pass
+
+    if ligands == None:
+        ligands = ro.r("NULL")
+    elif isinstance(ligands, list) or isinstance(ligands, str):
+        ligands = _convert_to_RVector(ligands, force_Rvec=True)
+    elif isinstance(ligands, tuple):
+        ligands = ro.ListVector({chr(ord('`')+i):l for i,l in zip(range(1, len(ligands)+1), ligands)})
+    else:
+        pass
+
+    if state == None:
+        state = ro.r("NULL")
+    elif isinstance(state, list) or isinstance(state, str):
+        state = _convert_to_RVector(state, force_Rvec=True)
+    elif isinstance(state, tuple):
+        state = ro.ListVector({chr(ord('`')+i):l for i,l in zip(range(1, len(state)+1), state)})
+    else:
+        pass
+
+    if T == None:
+        T = ro.r("NULL")
+    if P == None:
+        P = ro.r("NULL")
+    
+    args = {'elements':elements, 'ligands':ligands, 'state':state, 'T':T, 'P':P,
+            'add_charge':add_charge, 'hide_groups':hide_groups}
+    
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        out = CHNOSZ.retrieve(**args)
+        
+    if messages:
+        for warning in w:
+            print(warning.message)
+
+    out = list(out)
+
+    return out
+
+    
 def animation(basis_args={}, species_args={}, affinity_args={},
               equilibrate_args=None, diagram_args={},
               anim_var="T", anim_range=[0, 350, 8],
@@ -226,9 +361,26 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     
     basis_sp = basis_args["species"]
     sp = species_args["species"]
-    basis_out = basis(**basis_args)
-    species_out = species(**species_args)
 
+    if isinstance(sp[0], int):
+        sp = [info(s, messages=False)["name"].values[0] for s in sp]
+    
+    basis_out = basis(**basis_args)
+    
+    if "logact" in species_args.keys():
+        mod_species_logact = copy.copy(species_args['logact'])
+        del species_args['logact']
+    else:
+        mod_species_logact = []
+    
+    species_out = species(**species_args)
+    
+    if len(mod_species_logact)>0:
+        for i in range(0, len(mod_species_logact)) :
+            species_out = species(species_args["species"][i], mod_species_logact[i])
+
+    
+            
     dfs = []
     dmaps = []
     dmaps_names = []
@@ -252,14 +404,16 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     
     for z in zvals:
         
+
         if anim_var in basis_out.index:
-            basis(anim_var, z)
+            basis_out = basis(anim_var, z)
         elif anim_var in list(species_out["name"]):
-            species(anim_var, z)
+            species_out = species(anim_var, z)
         else:
             affinity_args[anim_var] = z
-
+        
         aeout = affinity(**affinity_args)
+        
         if equilibrate_args != None:
             equilibrate_args["aout"] = aeout
             if "messages" not in equilibrate_args.keys():
@@ -325,6 +479,18 @@ def animation(basis_args={}, species_args={}, affinity_args={},
                       width=500,  height=400, animation_frame=anim_var,
                       labels=dict(value=yvar, x=xvar),
                      )
+        
+        if "annotation" in diagram_args.keys():
+            if "annotation_coords" not in diagram_args.keys():
+                diagram_args["annotation_coords"] = [0, 0]
+            fig.add_annotation(x=diagram_args["annotation_coords"][0],
+                               y=diagram_args["annotation_coords"][1],
+                               xref="paper",
+                               yref="paper",
+                               align='left',
+                               text=diagram_args["annotation"],
+                               bgcolor="rgba(255, 255, 255, 0.5)",
+                               showarrow=False)
         
         if 'main' in diagram_args.keys():
             fig.update_layout(title={'text':diagram_args["main"], 'x':0.5, 'xanchor':'center'})
@@ -410,6 +576,7 @@ def animation(basis_args={}, species_args={}, affinity_args={},
                     y=diagram_args["annotation_coords"][1],
                     xref="paper",
                     yref="paper",
+                    align='left',
                     text=diagram_args["annotation"],
                     bgcolor="rgba(255, 255, 255, 0.5)",
                     showarrow=False,
@@ -529,13 +696,12 @@ def animation(basis_args={}, species_args={}, affinity_args={},
 
     fig.show(config=config)
 
-
-
+    
 def diagram_interactive(data, title=None,
                         annotation=None, annotation_coords=[0, 0],
                         balance=None, xlab=None, ylab=None, colormap="viridis",
                         width=600, height=520, alpha=False, messages=True,
-                        plot_it=True):
+                        plot_it=True, save_as=None, save_format=None, save_scale=1):
     
     """
     Produce an interactive diagram.
@@ -573,6 +739,24 @@ def diagram_interactive(data, title=None,
     
     plot_it : bool, default True
         Show the plot?
+
+    save_as : str, optional
+        For interactive plots only (`interactive`=True). Provide a filename to
+        save this figure. Filetype of saved figure is determined by
+        `save_format`.
+        Note: interactive plots can be saved by clicking the 'Download plot'
+        button in the plot's toolbar.
+
+    save_format : str, default "png"
+        For interactive plots only (`interactive`=True). Desired format of saved
+        or downloaded figure. Can be 'png', 'jpg', 'jpeg', 'webp', 'svg', 'pdf',
+        'eps', 'json', or 'html'. If 'html', an interactive plot will be saved.
+        Only 'png', 'svg', 'jpeg', and 'webp' can be downloaded with the
+        'download as' button in the toolbar of an interactive plot.
+
+    save_scale : numeric, default 1
+        For interactive plots only (`interactive`=True). Multiply
+        title/legend/axis/canvas sizes by this factor when saving the figure.
     
     Returns
     -------
@@ -659,7 +843,7 @@ def diagram_interactive(data, title=None,
         
         fig = px.line(df, x=xvar, y="value", color='variable', template="simple_white",
                       width=width,  height=height,
-                      labels=dict(value=ylab, x=xlab),
+                      labels=dict(value=ylab, x=xlab), render_mode='svg',
                      )
         
         fig.update_layout(xaxis_title=xlab,
@@ -668,9 +852,31 @@ def diagram_interactive(data, title=None,
         
         if isinstance(title, str):
             fig.update_layout(title={'text':title, 'x':0.5, 'xanchor':'center'})
+
+        if isinstance(annotation, str):
+            fig.add_annotation(
+                x=annotation_coords[0],
+                y=annotation_coords[1],
+                text=annotation,
+                showarrow=False,
+                xref="paper",
+                yref="paper",
+                align='left',
+                bgcolor="rgba(255, 255, 255, 0.5)")
+
+        save_as, save_format = __save_figure(fig, save_as, save_format, save_scale,
+                                             plot_width=width, plot_height=height, ppi=1)
     
         config = {'displaylogo': False,
-                  'modeBarButtonsToRemove': ['resetScale2d', 'toggleSpikelines']}
+                  'modeBarButtonsToRemove': ['resetScale2d', 'toggleSpikelines'],
+                  'toImageButtonOptions': {
+                                             'format': save_format, # one of png, svg, jpeg, webp
+                                             'filename': save_as,
+                                             'height': height,
+                                             'width': width,
+                                             'scale': save_scale,
+                                          },
+                 }
 
     if len(xyvars) == 2:
         mappings = {'pred': {s:lab for s,lab in zip(sp,range(0,len(sp)))}}
@@ -721,20 +927,32 @@ def diagram_interactive(data, title=None,
                                    bgcolor="rgba(255, 255, 255, 0.5)",
                                    showarrow=False)
 
+        if isinstance(annotation, str):
+            fig.add_annotation(
+                x=annotation_coords[0],
+                y=annotation_coords[1],
+                text=annotation,
+                showarrow=False,
+                xref="paper",
+                yref="paper",
+                align='left',
+                bgcolor="rgba(255, 255, 255, 0.5)")
+                
+        save_as, save_format = __save_figure(fig, save_as, save_format, save_scale,
+                                             plot_width=width, plot_height=height, ppi=1)
+                
         config = {'displaylogo': False,
                   'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'zoomIn2d', 'zoomOut2d',
                                              'autoScale2d', 'resetScale2d', 'toggleSpikelines',
-                                             'hoverClosestCartesian', 'hoverCompareCartesian']}
-        
-    if isinstance(annotation, str):
-        fig.add_annotation(
-            x=annotation_coords[0],
-            y=annotation_coords[1],
-            text=annotation,
-            showarrow=False,
-            xref="paper",
-            yref="paper",
-            bgcolor="rgba(255, 255, 255, 0.5)")
+                                             'hoverClosestCartesian', 'hoverCompareCartesian'],
+                  'toImageButtonOptions': {
+                                             'format': save_format, # one of png, svg, jpeg, webp
+                                             'filename': save_as,
+                                             'height': height,
+                                             'width': width,
+                                             'scale': save_scale,
+                                          },
+                 }
         
     if plot_it:
         fig.show(config=config)
@@ -1171,9 +1389,10 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
             dx=0, dy=0, srt=0, min_area=0,
             main=None, legend_x=None,
             add=False, plot_it=True, tplot=True,
+            annotation=None, annotation_coords=[0,0],
             width=600, height=520, dpi=150,
-            messages=True, interactive=False,
-            annotation=None, annotation_coords=[0,0]):
+            messages=True, interactive=True, save_as=None, save_format=None,
+            save_scale=1):
     
     """
     Python wrapper for the diagram() function in CHNOSZ.
@@ -1326,7 +1545,15 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
 
     tplot : bool, default True
         Set up plot with thermo.plot.new?
+
+    annotation : str, optional
+        Annotation to add to the plot. Interactive plots only (`interactive`
+        is set to True).
     
+    annotation_coords : list of numeric, default [0, 0], optional
+        Coordinates of annotation, where 0,0 is bottom left and 1,1 is top
+        right. Interactive plots only (`interactive` is set to True).
+
     width, height : numeric, default 600 by 520
         Width and height of the plot.
         
@@ -1337,15 +1564,25 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
         Display messages from CHNOSZ?
     
     interactive : bool, default False
-        Experimental! Display an interactive plot?
+        Display an interactive plot?
 
-    annotation : str, optional
-        Annotation to add to the plot. Interactive plots only (`interactive`
-        is set to True).
-    
-    annotation_coords : list of numeric, default [0, 0], optional
-        Coordinates of annotation, where 0,0 is bottom left and 1,1 is top
-        right. Interactive plots only (`interactive` is set to True).
+    save_as : str, optional
+        For interactive plots only (`interactive`=True). Provide a filename to
+        save this figure. Filetype of saved figure is determined by
+        `save_format`.
+        Note: interactive plots can be saved by clicking the 'Download plot'
+        button in the plot's toolbar.
+
+    save_format : str, default "png"
+        For interactive plots only (`interactive`=True). Desired format of saved
+        or downloaded figure. Can be 'png', 'jpg', 'jpeg', 'webp', 'svg', 'pdf',
+        'eps', 'json', or 'html'. If 'html', an interactive plot will be saved.
+        Only 'png', 'svg', 'jpeg', and 'webp' can be downloaded with the
+        'download as' button in the toolbar of an interactive plot.
+
+    save_scale : numeric, default 1
+        For interactive plots only (`interactive`=True). Multiply
+        title/legend/axis/canvas sizes by this factor when saving the figure.
     
     Returns
     -------
@@ -1363,7 +1600,8 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
                                  colormap=fill,
                                  width=width, height=height,
                                  alpha=alpha, plot_it=plot_it,
-                                 messages=messages)
+                                 save_as=save_as, save_format=save_format,
+                                 save_scale=save_scale, messages=messages)
         return df
     
     
