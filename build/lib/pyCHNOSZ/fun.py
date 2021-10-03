@@ -1391,7 +1391,7 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
             add=False, plot_it=True, tplot=True,
             annotation=None, annotation_coords=[0,0],
             width=600, height=520, dpi=150,
-            messages=True, interactive=True, save_as=None, save_format=None,
+            messages=True, interactive=False, save_as=None, save_format=None,
             save_scale=1):
     
     """
