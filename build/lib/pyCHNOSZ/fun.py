@@ -1,5 +1,4 @@
 import os
-import warnings
 from contextlib import contextmanager
 from IPython.display import Image, display
 import pandas as pd
@@ -13,19 +12,20 @@ import statistics
 import pkg_resources
 import decimal
 import chemparse
+    
+from rpy2.rinterface_lib.callbacks import logger as rpy2_logger
+import logging
+rpy2_logger.setLevel(logging.ERROR)   # will display errors, but not warnings
 
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore")
-    
-    import rpy2.robjects as ro
-    from rpy2.robjects.packages import importr
-    from rpy2.robjects import pandas2ri
-    from rpy2.robjects.lib import grdevices
-    
-    pandas2ri.activate()
-    
-    CHNOSZ = importr("CHNOSZ")
-    grdev = importr('grDevices')
+import rpy2.robjects as ro
+from rpy2.robjects.packages import importr
+from rpy2.robjects import pandas2ri
+from rpy2.robjects.lib import grdevices
+
+pandas2ri.activate()
+
+CHNOSZ = importr("CHNOSZ")
+grdev = importr('grDevices')
 
 NumberTypes = (int, float, complex)
 
@@ -171,8 +171,63 @@ def __seq(start, end, by=None, length_out=None):
     return out
 
 
+def solubility(iaq=None, in_terms_of=None, dissociate=False, find_IS=False,
+               messages=True, **kwargs):
+
+    """
+    Python wrapper for the solubility() function in CHNOSZ.
+    Calculate chemical activities of aqueous species in equilibrium with a mineral or gas.
+    
+    Parameters
+    ----------
+    iaq : str, int, or list of str or int
+        Name(s) of aqueous species (if str). If int, the index of the aqueous
+        species in the OBIGT database.
+    
+    in_terms_of : str, optional
+        Express the total solubility in terms of moles of this species.
+    
+    dissociate : bool, default False
+        Does the mineral undergo a dissociation reaction?
+        
+    find_IS : bool, default False
+        Find the equilibrium ionic strength by iteration?
+
+    messages : bool, default True
+        Display messages from CHNOSZ?
+        
+    **kwargs : named arguments
+        Arguments for `affinity` or `mosaic` (i.e. plotting variables).
+    
+    Returns
+    -------
+    s : rpy2.ListVector
+        Output from `solubility`.
+    """
+    
+    args = {'dissociate':dissociate, 'find_IS':find_IS}
+    
+    if in_terms_of != None: args["in_terms_of"] = in_terms_of
+    args["iaq"] = _convert_to_RVector(iaq, force_Rvec=True)
+    
+    for key, value in kwargs.items():
+        if isinstance(value, list):
+            value = ro.FloatVector(value)
+        args.update({key:value})
+
+    if messages:
+        rpy2_logger.setLevel(logging.WARNING)
+
+    s = CHNOSZ.solubility(**args)
+
+    if messages:
+        rpy2_logger.setLevel(logging.ERROR)
+
+    return s
+    
+
 def retrieve(elements=None, ligands=None, state=None, T=None, P="Psat",
-             add_charge=True, hide_groups=True, messages=True):
+             add_charge=True, hide_groups=True, must_have=None, messages=True):
     """
     Python wrapper for the retrieve() function in CHNOSZ.
     Retrieve species in the database containing one or more chemical elements.
@@ -215,8 +270,8 @@ def retrieve(elements=None, ligands=None, state=None, T=None, P="Psat",
     hide_groups : bool, default True
         Exclude groups from the result?
     
-    dict_output : bool, default False
-        give 
+    must_have : str or list of str, optional
+        Retrieved species must have the element(s).
 
     messages : bool, default True
         Display messages from CHNOSZ?
@@ -262,15 +317,28 @@ def retrieve(elements=None, ligands=None, state=None, T=None, P="Psat",
     args = {'elements':elements, 'ligands':ligands, 'state':state, 'T':T, 'P':P,
             'add_charge':add_charge, 'hide_groups':hide_groups}
     
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        out = CHNOSZ.retrieve(**args)
+    if messages:
+        rpy2_logger.setLevel(logging.WARNING)
+    
+    out = CHNOSZ.retrieve(**args)
         
     if messages:
-        for warning in w:
-            print(warning.message)
+        rpy2_logger.setLevel(logging.ERROR)
 
     out = list(out)
+    
+    if isinstance(must_have, str):
+        must_have = [must_have]
+        
+    if isinstance(must_have, list):
+        df = info(out, messages=False)
+        formulas = df["formula"].apply(chemparse.parse_formula)
+        keep_ind = []
+        for i,formula in enumerate(formulas):
+            if all(elem in formula.keys()  for elem in must_have):
+                keep_ind.append(i)
+        keep_ind = list(set(keep_ind))
+        out = [out[i] for i in keep_ind]
 
     return out
 
@@ -361,8 +429,8 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     
     basis_sp = basis_args["species"]
     sp = species_args["species"]
-
-    if isinstance(sp[0], int):
+    
+    if isinstance(sp[0], (int, np.integer)):
         sp = [info(s, messages=False)["name"].values[0] for s in sp]
     
     basis_out = basis(**basis_args)
@@ -378,8 +446,6 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     if len(mod_species_logact)>0:
         for i in range(0, len(mod_species_logact)) :
             species_out = species(species_args["species"][i], mod_species_logact[i])
-
-    
             
     dfs = []
     dmaps = []
@@ -526,12 +592,13 @@ def animation(basis_args={}, species_args={}, affinity_args={},
             ylab = unit_dict[yvar]
         if yvar == "pH":
             yvar = "pH"
-        
+    
     frames = []
     slider_steps = []
     annotations = []
     cst_data = []
     heatmaps = []
+    
     # i is a frame in the animation
     for i in range(0, len(zvals)):
 
@@ -585,9 +652,23 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     
         annotations.append(annotations_i)
 
+        if 'ylab' in diagram_args.keys():
+            ylab = diagram_args["ylab"]
+            hover_ylab = ylab+': %{y} '
+        else:
+            ylab = html_chemname_format(ylab)
+            hover_ylab = yvar+': %{y} '+unit_dict[yvar]
+
+        if 'xlab' in diagram_args.keys():
+            xlab = diagram_args["xlab"]
+            hover_xlab = xlab+': %{x} '
+        else:
+            xlab = html_chemname_format(xlab)
+            hover_xlab = xvar+': %{x} '+unit_dict[xvar]
+        
         heatmaps_i = go.Heatmap(z=dmaps[i], x=xvals, y=yvals, zmin=0, zmax=len(sp)-1,
                                 customdata=dmaps_names[i],
-                                hovertemplate=xvar+': %{x} '+unit_dict[xvar]+'<br>'+yvar+': %{y} '+unit_dict[yvar]+'<br>Region: %{customdata}<extra></extra>')
+                                hovertemplate=hover_xlab+'<br>'+hover_ylab+'<br>Region: %{customdata}<extra></extra>')
 
         heatmaps.append(heatmaps_i)
         
@@ -666,24 +747,13 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     fig.update_traces(dict(showscale=False,
                            colorscale='viridis'),
                       selector={'type':'heatmap'})
-
-
-    if 'ylab' in diagram_args.keys():
-        ylab = diagram_args["ylab"]
-    else:
-        ylab = html_chemname_format(ylab)
-        
-    if 'xlab' in diagram_args.keys():
-        xlab = diagram_args["xlab"]
-    else:
-        xlab = html_chemname_format(xlab)
     
     fig.update_layout(
         xaxis_title=xlab,
         yaxis_title=ylab,
         xaxis={"range":[list(dfs[0][xvar])[0], list(dfs[0][xvar])[-1]]},
         yaxis={"range":[list(dfs[0][yvar])[0], list(dfs[0][yvar])[-1]]},
-        margin={"t": 40, "r":60},
+        margin={"t": 60, "r":60},
     )
 
     if 'main' in diagram_args.keys():
@@ -763,7 +833,7 @@ def diagram_interactive(data, title=None,
     An interactive plot.
     """
     
-    basis_sp = data.rx2("basis").rownames
+    basis_sp = list(data.rx2("basis").index)
 
     xyvars = list(data.rx2("vars"))
     xyvals = list(data.rx2("vals"))
@@ -778,7 +848,12 @@ def diagram_interactive(data, title=None,
     if calc_type=="a":
         out_vals = data.rx2("values")
         out_units = "A/(2.303RT)"
-        df = pandas2ri.ri2py_dataframe(out_vals)
+        
+        nsp = len(out_vals)
+        lsp = out_vals[0].size
+        
+        flat_out_vals = np.concatenate(tuple(arr.transpose() for arr in out_vals), axis=0).reshape(nsp, lsp).tolist()
+        df = pd.DataFrame(flat_out_vals)
         df["n.balance"] = list(data.rx2("n.balance"))
         
         # divide values by balance
@@ -789,7 +864,13 @@ def diagram_interactive(data, title=None,
     elif calc_type=="e":
         out_vals = data.rx2("loga.equil")
         out_units = "log a"
-        df = pandas2ri.ri2py_dataframe(out_vals)
+
+        nsp = len(out_vals)
+        lsp = out_vals[0].size
+        
+        flat_out_vals = np.concatenate(tuple(arr.transpose() for arr in out_vals), axis=0).reshape(nsp, lsp).tolist()
+        
+        df = pd.DataFrame(flat_out_vals)
         sp = list(info([int(val) for val in list(data.rx2("values").names)], messages=False)["name"])
     
     df.index = sp
@@ -820,6 +901,7 @@ def diagram_interactive(data, title=None,
         df["prednames"] = df["pred"]
 
         xvals_full = xvals*len(yvals)
+        
         yvals_full = __flatten_list([[y]*len(xvals) for y in yvals])
         df[xvar] = xvals_full
         df[yvar] = yvals_full
@@ -990,12 +1072,13 @@ def _convert_to_RVector(value, force_Rvec=True):
     
     if all(isinstance(x, bool) for x in value):
         return ro.BoolVector(value)
-    elif all(isinstance(x, int) for x in value):
+    elif all(isinstance(x, (int, np.integer)) for x in value):
         return ro.IntVector(value)
-    elif all(isinstance(x, float) or isinstance(x, int) for x in value):
+    elif all(isinstance(x, (int, np.integer, float, np.float)) for x in value):
         return ro.FloatVector(value)
     else:
         return ro.StrVector(value)
+
             
 
 def water(property=None, T=298.15, P="Psat", P1=True, messages=True):
@@ -1042,26 +1125,17 @@ def water(property=None, T=298.15, P="Psat", P1=True, messages=True):
     
     args = {'property':property, 'T':T, 'P':P, 'P1':P1}
     
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        out = CHNOSZ.water(**args)
+    if messages:
+        rpy2_logger.setLevel(logging.WARNING)
+    
+    out = CHNOSZ.water(**args)
 
     if messages:
-        for warning in w:
-            print(warning.message)
+        rpy2_logger.setLevel(logging.ERROR)
     
     if property not in ["SUPCRT92", "SUPCRT", "IAPWS95", "IAPWS", "DEW"]:
-        out = list(out)
-        if len(out) == 1:
-            if property == ro.r("NULL"):
-                out = out[0]
-            else:
-                out = out[0][0]
-        else:
-            # CHNOSZ produces a single-row dataframe when multiple properties
-            # are supplied to `property`. Here, a dictionary is returned.
-            out = {prop:o[0] for prop,o in zip(property, out)}
-        return out
+
+        return ro.conversion.rpy2py(out)
         
         
 def entropy(formula, messages=True):
@@ -1088,13 +1162,13 @@ def entropy(formula, messages=True):
     
     formula_R = _convert_to_RVector(formula, force_Rvec=False)
     
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        out = CHNOSZ.entropy(formula_R)
+    if messages:
+        rpy2_logger.setLevel(logging.WARNING)
+        
+    out = CHNOSZ.entropy(formula_R)
 
     if messages:
-        for warning in w:
-            print(warning.message)
+        rpy2_logger.setLevel(logging.ERROR)
     
     out = list(out)
     if not isinstance(formula, list):
@@ -1126,15 +1200,14 @@ def mass(formula, messages=True):
     """
     
     formula_R = _convert_to_RVector(formula, force_Rvec=False)
-    print(formula_R)
     
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        out = CHNOSZ.mass(formula_R)
+    if messages:
+        rpy2_logger.setLevel(logging.WARNING)
+    
+    out = CHNOSZ.mass(formula_R)
 
     if messages:
-        for warning in w:
-            print(warning.message)
+        rpy2_logger.setLevel(logging.ERROR)
     
     out = list(out)
     if not isinstance(formula, list):
@@ -1166,13 +1239,13 @@ def zc(formula, messages=True):
     
     formula_R = _convert_to_RVector(formula, force_Rvec=False)
     
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        out = CHNOSZ.ZC(formula_R)
+    if messages:
+        rpy2_logger.setLevel(logging.WARNING)
+    
+    out = CHNOSZ.ZC(formula_R)
 
     if messages:
-        for warning in w:
-            print(warning.message)
+        rpy2_logger.setLevel(logging.ERROR)
     
     out = list(out)
     if not isinstance(formula, list):
@@ -1219,13 +1292,13 @@ def makeup(formula, multiplier=1, sum=False, count_zero=False, messages=True):
     args = {'formula':formula_R, "multiplier":multiplier,
             "sum":sum, "count.zero":count_zero}
     
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        out = CHNOSZ.makeup(**args)
+    if messages:
+        rpy2_logger.setLevel(logging.WARNING)
+        
+    out = CHNOSZ.makeup(**args)
         
     if messages:
-        for warning in w:
-            print(warning.message)
+        rpy2_logger.setLevel(logging.ERROR)
     
     if isinstance(out, ro.ListVector):
         out_dict = {}
@@ -1278,15 +1351,15 @@ def seq2aa(protein, sequence, messages=True):
     
     args = {'protein':protein, 'sequence':sequence}
 
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        pout = CHNOSZ.seq2aa(**args)
+    if messages:
+        rpy2_logger.setLevel(logging.WARNING)
+    
+    pout = CHNOSZ.seq2aa(**args)
 
     if messages:
-        for warning in w:
-            print(warning.message)
+        rpy2_logger.setLevel(logging.ERROR)
     
-    return pandas2ri.ri2py_dataframe(pout)
+    return ro.conversion.rpy2py(pout)
 
 
 def add_protein(aa, messages=True):
@@ -1308,16 +1381,16 @@ def add_protein(aa, messages=True):
     list of int
         List of protein indices, iprotein.
     """
-    aa = pandas2ri.py2ri(aa)
+    aa = ro.conversion.py2rpy(aa)
     args = {'aa':aa}
 
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        apout = CHNOSZ.add_protein(**args)
+    if messages:
+        rpy2_logger.setLevel(logging.WARNING)
+    
+    apout = CHNOSZ.add_protein(**args)
 
     if messages:
-        for warning in w:
-            print(warning.message)
+        rpy2_logger.setLevel(logging.ERROR)
     
     return list(apout)
 
@@ -1364,13 +1437,13 @@ def equilibrate(aout, balance=None, loga_balance=None, ispecies=None,
     if loga_balance != None: args['loga.balance'] = loga_balance
     if ispecies != None: args['ispecies'] = _convert_to_RVector(ispecies)
 
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        eout = CHNOSZ.equilibrate(**args)
+    if messages:
+        rpy2_logger.setLevel(logging.WARNING)
+        
+    eout = CHNOSZ.equilibrate(**args)
 
     if messages:
-        for warning in w:
-            print(warning.message)
+        rpy2_logger.setLevel(logging.ERROR)
     
     return eout
 
@@ -1605,7 +1678,7 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
         return df
     
     
-    args = {'eout':eout, 'ptype':ptype, 'alpha':alpha, 'normalize':normalize,
+    args = {'eout':eout, 'type':ptype, 'alpha':alpha, 'normalize':normalize,
             'as.residue':as_residue, 'ylog':ylog, 'fill.NA':fill_NA, 'format.names':format_names,
             'bold':bold, 'italic':italic, 'adj':adj, 'dx':dx, 'dy':dy, 'srt':srt,
             'min.area':min_area, 'plot.it':plot_it, 'tplot':tplot}
@@ -1645,28 +1718,28 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
     if main != None: args["main"] = main
     if legend_x != None: args["legend.x"] = legend_x
     
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
-            if isinstance(add, bool):
-                if add: # add='True' does not work with the current pyCHNOSZ framework
-                    raise Exception("The argument 'add' must be assigned the output of the previous diagram(s).")
-                else:
-                    a = CHNOSZ.diagram(**args)
-            elif isinstance(add, list):
-                args.update({'add':True})
-                for to_add in add:
-                    CHNOSZ.diagram(**to_add)
-                a = CHNOSZ.diagram(**args)
-                    
+    if messages:
+        rpy2_logger.setLevel(logging.WARNING)
+        
+    with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
+        if isinstance(add, bool):
+            if add: # add='True' does not work with the current pyCHNOSZ framework
+                raise Exception("The argument 'add' must be assigned the output of the previous diagram(s).")
             else:
-                CHNOSZ.diagram(**add)
-                args.update({'add':True})
                 a = CHNOSZ.diagram(**args)
+        elif isinstance(add, list):
+            args.update({'add':True})
+            for to_add in add:
+                CHNOSZ.diagram(**to_add)
+            a = CHNOSZ.diagram(**args)
+
+        else:
+            CHNOSZ.diagram(**add)
+            args.update({'add':True})
+            a = CHNOSZ.diagram(**args)
             
     if messages:
-        for warning in w:
-            print(warning.message)
+        rpy2_logger.setLevel(logging.ERROR)
     
     return a, args
 
@@ -1723,9 +1796,9 @@ def affinity(property=None, sout=None, exceed_Ttr=False,
     messages : bool, default True
         Display messages from CHNOSZ?
         
-    **kwargs : dict
-        Numeric, zero or more named arguments, used to identify the variables
-        of interest in the calculations.
+    **kwargs : numeric, zero or more named arguments
+        Used to identify the variables of interest in the calculations. E.g.,
+        pH, T, P, Eh, ...
     
     Returns
     -------
@@ -1747,13 +1820,13 @@ def affinity(property=None, sout=None, exceed_Ttr=False,
             value = ro.FloatVector(value)
         args.update({key:value})
         
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        a = CHNOSZ.affinity(**args)
+    if messages:
+        rpy2_logger.setLevel(logging.WARNING)
+    
+    a = CHNOSZ.affinity(**args)
 
     if messages:
-        for warning in w:
-            print(warning.message)
+        rpy2_logger.setLevel(logging.ERROR)
 
     return a
 
@@ -1808,15 +1881,15 @@ def species(species=None, state=None, delete=False, add=False,
     args["delete"] = delete
     args["index.return"] = index_return
     
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        sout = CHNOSZ.species(**args)
+    if messages:
+        rpy2_logger.setLevel(logging.WARNING)
+    
+    sout = CHNOSZ.species(**args)
         
     if messages:
-        for warning in w:
-            print(warning.message)
+        rpy2_logger.setLevel(logging.ERROR)
     
-    return pandas2ri.ri2py_dataframe(sout)
+    return ro.conversion.rpy2py(sout)
 
 
 def basis(species=None, state=None, logact=None, delete=False, messages=True):
@@ -1861,15 +1934,15 @@ def basis(species=None, state=None, logact=None, delete=False, messages=True):
     
     args["delete"] = delete
     
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        bout = CHNOSZ.basis(**args)
+    if messages:
+        rpy2_logger.setLevel(logging.WARNING)
+    
+    bout = CHNOSZ.basis(**args)
         
     if messages:
-        for warning in w:
-            print(warning.message)
+        rpy2_logger.setLevel(logging.ERROR)
     
-    return pandas2ri.ri2py_dataframe(bout)
+    return ro.conversion.rpy2py(bout)
 
 
 def reset(messages=True):
@@ -1887,13 +1960,13 @@ def reset(messages=True):
     
     """
     
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        CHNOSZ.reset()
+    if messages:
+        rpy2_logger.setLevel(logging.WARNING)
+    
+    CHNOSZ.reset()
         
     if messages:
-        for warning in w:
-            print(warning.message)
+        rpy2_logger.setLevel(logging.ERROR)
 
 
 def add_OBIGT(file, species=None, force=True, messages=True):
@@ -1932,13 +2005,13 @@ def add_OBIGT(file, species=None, force=True, messages=True):
         else:
             args["species"] = _convert_to_RVector(species)
 
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        ispecies = CHNOSZ.add_OBIGT(**args)
+    if messages:
+        rpy2_logger.setLevel(logging.WARNING)
+    
+    ispecies = CHNOSZ.add_OBIGT(**args)
     
     if messages:
-        for warning in w:
-            print(warning.message)
+        rpy2_logger.setLevel(logging.ERROR)
     
     return list(ispecies)
 
@@ -1969,21 +2042,20 @@ def mod_OBIGT(*args, messages=True, **kwargs):
         modified.
     """
 
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
+    if messages:
+        rpy2_logger.setLevel(logging.WARNING)
         
-        if isinstance(args[0], pd.DataFrame):
-            arg_list = list(args)
-            arg_list[0] = pandas2ri.py2ri(arg_list[0])
-            args = tuple(arg_list)
-        else:
-            pass
-        
-        ispecies = CHNOSZ.mod_OBIGT(*args, **kwargs)
+    if isinstance(args[0], pd.DataFrame):
+        arg_list = list(args)
+        arg_list[0] = ro.conversion.py2rpy(arg_list[0])
+        args = tuple(arg_list)
+    else:
+        pass
+
+    ispecies = CHNOSZ.mod_OBIGT(*args, **kwargs)
     
     if messages:
-        for warning in w:
-            print(warning.message)
+        rpy2_logger.setLevel(logging.ERROR)
     
     return list(ispecies)
     
@@ -2023,7 +2095,7 @@ def info(species, state=None, check_it=True, messages=True):
     
     args["species"] = _convert_to_RVector(species, force_Rvec=False)
     if not isinstance(species, list): species = [species]
-    if all(isinstance(x, int) for x in species):
+    if all(isinstance(x, (int, np.integer)) for x in species):
         output_is_df = True
     
     if state != None:
@@ -2031,16 +2103,16 @@ def info(species, state=None, check_it=True, messages=True):
     
     args["check.it"] = check_it
 
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        a = CHNOSZ.info(**args)
+    if messages:
+        rpy2_logger.setLevel(logging.WARNING)
+    
+    a = CHNOSZ.info(**args)
     
     if messages:
-        for warning in w:
-            print(warning.message)
+        rpy2_logger.setLevel(logging.ERROR)
     
     if output_is_df:
-        return pandas2ri.ri2py_dataframe(a)
+        return ro.conversion.rpy2py(a)
     else:
         return list(a)
 
@@ -2148,13 +2220,13 @@ def subcrt(species, coeff=None, state=None,
     if IS != None:
         args["IS"] = _convert_to_RVector(IS, force_Rvec=False)
     
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        a = CHNOSZ.subcrt(**args)
-    
     if messages:
-        for warning in w:
-            print(warning.message)
+        rpy2_logger.setLevel(logging.WARNING)
+        
+    a = CHNOSZ.subcrt(**args)
+
+    if messages:
+        rpy2_logger.setLevel(logging.ERROR)
     
     if len(a) == 3:
         warn = a[2][0] # subcrt's list includes warnings only if they appear
@@ -2162,14 +2234,14 @@ def subcrt(species, coeff=None, state=None,
         warn = None
     
     if not single_species:
-        out_dict = {"reaction":pandas2ri.ri2py_dataframe(a[0]),
-                    "out":pandas2ri.ri2py_dataframe(a[1])} # the extra [0] is important
+        out_dict = {"reaction":ro.conversion.rpy2py(a[0]),
+                    "out":ro.conversion.rpy2py(a[1])} # the extra [0] is important
     else:
-        out_dict = {"species":pandas2ri.ri2py_dataframe(a[0]), "out":{}}
+        out_dict = {"species":ro.conversion.rpy2py(a[0]), "out":{}}
         
         i=0
         for df in a[1]:
-            out_dict["out"][out_dict["species"].name[i]] = pandas2ri.ri2py_dataframe(df)
+            out_dict["out"][out_dict["species"].name[i]] = ro.conversion.rpy2py(df)
             i += 1
         
     if warn != None:
@@ -2281,22 +2353,22 @@ class thermo(object):
             if isinstance(value, list) or isinstance(value, str) or isinstance(value, NumberTypes):
                 value = _convert_to_RVector(value, force_Rvec=False)
             elif isinstance(value, pd.DataFrame):
-                value = pandas2ri.py2ri_dataframe(value)
+                value = ro.conversion.py2rpy(value)
             else:
                 pass
             args.update({key:value})
         
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            t = CHNOSZ.thermo(**args)
+        if messages:
+            rpy2_logger.setLevel(logging.WARNING)
+            
+        t = CHNOSZ.thermo(**args)
 
         if messages:
-            for warning in w:
-                print(warning.message)
+            rpy2_logger.setLevel(logging.ERROR)
         
         for i, name in enumerate(t.names):
             if isinstance(t[i], ro.DataFrame) or isinstance(t[i], ro.Matrix):
-                attr = pandas2ri.ri2py_dataframe(t[i])
+                attr = ro.conversion.rpy2py(t[i])
             elif isinstance(t[i], ro.ListVector):
                 attr = {}
                 for ii, subname in enumerate(t[i].names):
@@ -2405,60 +2477,60 @@ def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
     pressures = _convert_to_RVector(pressures, force_Rvec=False)
     temperatures = _convert_to_RVector(temperatures, force_Rvec=False)
     
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        r_univariant = pkg_resources.resource_string(
-            __name__, 'univariant.r').decode("utf-8")
-        ro.r(r_univariant)
-        if solve=="T":
-            a = ro.r.uc_solveT(logK=logK,
-                               species=species,
-                               coeff=coeff,
-                               state=state,
-                               pressures=pressures,
-                               IS=IS,
-                               minT=minT,
-                               maxT=maxT,
-                               tol=tol)
-            if plot_it:
-                with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
-                    ro.r.create_output_plot_T(logK=logK,
-                                              species=species,
-                                              coeff=coeff,
-                                              state=state,
-                                              pressures=pressures,
-                                              minT=minT,
-                                              maxT=maxT)
-        elif solve=="P":
-            a = ro.r.uc_solveP(logK=logK,
-                               species=species,
-                               state=state,
-                               coeff=coeff,
-                               temperatures=temperatures,
-                               IS=IS,
-                               minP=minP,
-                               maxP=maxP,
-                               tol=tol)
-            if plot_it:
-                with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
-                    ro.r.create_output_plot_P(logK=logK,
-                                              species=species,
-                                              state=state,
-                                              coeff=coeff,
-                                              temperatures=temperatures,
-                                              minP=minP,
-                                              maxP=maxP)
     if messages:
-        for warning in w:
-            print(warning.message)
+        rpy2_logger.setLevel(logging.WARNING)
+
+    r_univariant = pkg_resources.resource_string(
+        __name__, 'univariant.r').decode("utf-8")
+    ro.r(r_univariant)
+    if solve=="T":
+        a = ro.r.uc_solveT(logK=logK,
+                           species=species,
+                           coeff=coeff,
+                           state=state,
+                           pressures=pressures,
+                           IS=IS,
+                           minT=minT,
+                           maxT=maxT,
+                           tol=tol)
+        if plot_it:
+            with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
+                ro.r.create_output_plot_T(logK=logK,
+                                          species=species,
+                                          coeff=coeff,
+                                          state=state,
+                                          pressures=pressures,
+                                          minT=minT,
+                                          maxT=maxT)
+    elif solve=="P":
+        a = ro.r.uc_solveP(logK=logK,
+                           species=species,
+                           state=state,
+                           coeff=coeff,
+                           temperatures=temperatures,
+                           IS=IS,
+                           minP=minP,
+                           maxP=maxP,
+                           tol=tol)
+        if plot_it:
+            with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
+                ro.r.create_output_plot_P(logK=logK,
+                                          species=species,
+                                          state=state,
+                                          coeff=coeff,
+                                          temperatures=temperatures,
+                                          minP=minP,
+                                          maxP=maxP)
+    if messages:
+        rpy2_logger.setLevel(logging.ERROR)
 
     if len(a) == 3:
         warn = a[2][0] # subcrt's list includes warnings only if they appear
     else:
         warn = None
     
-    out_dict = {"reaction":pandas2ri.ri2py_dataframe(a[0]),
-                "out":pandas2ri.ri2py_dataframe(a[1])} # the extra [0] is important
+    out_dict = {"reaction":ro.conversion.rpy2py(a[0]),
+                "out":ro.conversion.rpy2py(a[1])} # the extra [0] is important
         
     if warn != None:
         out_dict["warnings"] = warn

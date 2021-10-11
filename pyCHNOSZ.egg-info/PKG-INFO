@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: pyCHNOSZ
-Version: 0.7.2
+Version: 0.8.0
 Summary: Python wrapper for the R package CHNOSZ.
 Home-page: UNKNOWN
 Author: Grayson Boyer
@@ -166,7 +166,8 @@ Description: # pyCHNOSZ
         
         ### More examples:
         
-        For more examples, like plotting activity and predominance diagrams, check out the [pyCHNOSZ demo notebook](https://gitlab.com/worm1/pychnosz/-/blob/master/test/pyCHNOSZ-demo.ipynb).
+        For more examples, like plotting activity and predominance diagrams, check out the [pyCHNOSZ demo notebook](https://github.com/worm-portal/pyCHNOSZ/blob/master/test/pyCHNOSZ-demo.ipynb).
+        
 Platform: UNKNOWN
 Classifier: Programming Language :: Python :: 3
 Classifier: License :: OSI Approved :: MIT License
