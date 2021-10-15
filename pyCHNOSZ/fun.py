@@ -12,10 +12,10 @@ import statistics
 import pkg_resources
 import decimal
 import chemparse
-    
-from rpy2.rinterface_lib.callbacks import logger as rpy2_logger
+
+import rpy2.rinterface_lib.callbacks
 import logging
-rpy2_logger.setLevel(logging.ERROR)   # will display errors, but not warnings
+rpy2.rinterface_lib.callbacks.logger.setLevel(logging.ERROR)   # will display errors, but not warnings
 
 import rpy2.robjects as ro
 from rpy2.robjects.packages import importr
@@ -58,6 +58,30 @@ def __r_inline_plot(width=600, height=520, dpi=150, plot_it=True):
     data = b.getvalue()
     if plot_it:
         display(Image(data=data, format='png', embed=True))
+
+
+class __R_output(object):
+    
+    def capture_r_output(self):
+        """
+        Capture and create a list of R console messages
+        """
+        
+        # Record output #
+        self.stdout = []
+        self.stderr = []
+        
+        # Dummy functions #
+        def add_to_stdout(line): self.stdout.append(line)
+        def add_to_stderr(line): self.stderr.append(line)
+            
+        # Keep the old functions #
+        self.stdout_orig = rpy2.rinterface_lib.callbacks.consolewrite_print
+        self.stderr_orig = rpy2.rinterface_lib.callbacks.consolewrite_warnerror
+        
+        # Set the call backs #
+        rpy2.rinterface_lib.callbacks.consolewrite_print     = add_to_stdout
+        rpy2.rinterface_lib.callbacks.consolewrite_warnerror = add_to_stderr
 
     
 def __flatten_list(_2d_list):
@@ -215,13 +239,13 @@ def solubility(iaq=None, in_terms_of=None, dissociate=False, find_IS=False,
             value = ro.FloatVector(value)
         args.update({key:value})
 
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
+    capture = __R_output()
+    capture.capture_r_output()
 
     s = CHNOSZ.solubility(**args)
 
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
 
     return s
     
@@ -317,13 +341,13 @@ def retrieve(elements=None, ligands=None, state=None, T=None, P="Psat",
     args = {'elements':elements, 'ligands':ligands, 'state':state, 'T':T, 'P':P,
             'add_charge':add_charge, 'hide_groups':hide_groups}
     
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
-    
+    capture = __R_output()
+    capture.capture_r_output()
+
     out = CHNOSZ.retrieve(**args)
-        
+
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
 
     out = list(out)
     
@@ -1125,13 +1149,13 @@ def water(property=None, T=298.15, P="Psat", P1=True, messages=True):
     
     args = {'property':property, 'T':T, 'P':P, 'P1':P1}
     
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
+    capture = __R_output()
+    capture.capture_r_output()
     
     out = CHNOSZ.water(**args)
 
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
     
     if property not in ["SUPCRT92", "SUPCRT", "IAPWS95", "IAPWS", "DEW"]:
 
@@ -1162,13 +1186,13 @@ def entropy(formula, messages=True):
     
     formula_R = _convert_to_RVector(formula, force_Rvec=False)
     
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
+    capture = __R_output()
+    capture.capture_r_output()
         
     out = CHNOSZ.entropy(formula_R)
 
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
     
     out = list(out)
     if not isinstance(formula, list):
@@ -1201,13 +1225,13 @@ def mass(formula, messages=True):
     
     formula_R = _convert_to_RVector(formula, force_Rvec=False)
     
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
+    capture = __R_output()
+    capture.capture_r_output()
     
     out = CHNOSZ.mass(formula_R)
 
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
     
     out = list(out)
     if not isinstance(formula, list):
@@ -1239,13 +1263,13 @@ def zc(formula, messages=True):
     
     formula_R = _convert_to_RVector(formula, force_Rvec=False)
     
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
+    capture = __R_output()
+    capture.capture_r_output()
     
     out = CHNOSZ.ZC(formula_R)
 
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
     
     out = list(out)
     if not isinstance(formula, list):
@@ -1292,13 +1316,13 @@ def makeup(formula, multiplier=1, sum=False, count_zero=False, messages=True):
     args = {'formula':formula_R, "multiplier":multiplier,
             "sum":sum, "count.zero":count_zero}
     
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
+    capture = __R_output()
+    capture.capture_r_output()
         
     out = CHNOSZ.makeup(**args)
         
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
     
     if isinstance(out, ro.ListVector):
         out_dict = {}
@@ -1351,13 +1375,13 @@ def seq2aa(protein, sequence, messages=True):
     
     args = {'protein':protein, 'sequence':sequence}
 
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
+    capture = __R_output()
+    capture.capture_r_output()
     
     pout = CHNOSZ.seq2aa(**args)
 
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
     
     return ro.conversion.rpy2py(pout)
 
@@ -1384,13 +1408,13 @@ def add_protein(aa, messages=True):
     aa = ro.conversion.py2rpy(aa)
     args = {'aa':aa}
 
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
+    capture = __R_output()
+    capture.capture_r_output()
     
     apout = CHNOSZ.add_protein(**args)
 
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
     
     return list(apout)
 
@@ -1437,13 +1461,13 @@ def equilibrate(aout, balance=None, loga_balance=None, ispecies=None,
     if loga_balance != None: args['loga.balance'] = loga_balance
     if ispecies != None: args['ispecies'] = _convert_to_RVector(ispecies)
 
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
+    capture = __R_output()
+    capture.capture_r_output()
         
     eout = CHNOSZ.equilibrate(**args)
 
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
     
     return eout
 
@@ -1718,8 +1742,8 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
     if main != None: args["main"] = main
     if legend_x != None: args["legend.x"] = legend_x
     
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
+    capture = __R_output()
+    capture.capture_r_output()
         
     with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
         if isinstance(add, bool):
@@ -1739,7 +1763,7 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
             a = CHNOSZ.diagram(**args)
             
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
     
     return a, args
 
@@ -1820,13 +1844,13 @@ def affinity(property=None, sout=None, exceed_Ttr=False,
             value = ro.FloatVector(value)
         args.update({key:value})
         
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
+    capture = __R_output()
+    capture.capture_r_output()
     
     a = CHNOSZ.affinity(**args)
 
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
 
     return a
 
@@ -1881,13 +1905,13 @@ def species(species=None, state=None, delete=False, add=False,
     args["delete"] = delete
     args["index.return"] = index_return
     
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
+    capture = __R_output()
+    capture.capture_r_output()
     
     sout = CHNOSZ.species(**args)
         
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
     
     return ro.conversion.rpy2py(sout)
 
@@ -1934,13 +1958,13 @@ def basis(species=None, state=None, logact=None, delete=False, messages=True):
     
     args["delete"] = delete
     
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
+    capture = __R_output()
+    capture.capture_r_output()
     
     bout = CHNOSZ.basis(**args)
         
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
     
     return ro.conversion.rpy2py(bout)
 
@@ -1960,13 +1984,13 @@ def reset(messages=True):
     
     """
     
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
+    capture = __R_output()
+    capture.capture_r_output()
     
     CHNOSZ.reset()
         
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
 
 
 def add_OBIGT(file, species=None, force=True, messages=True):
@@ -2005,13 +2029,13 @@ def add_OBIGT(file, species=None, force=True, messages=True):
         else:
             args["species"] = _convert_to_RVector(species)
 
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
+    capture = __R_output()
+    capture.capture_r_output()
     
     ispecies = CHNOSZ.add_OBIGT(**args)
     
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
     
     return list(ispecies)
 
@@ -2042,8 +2066,8 @@ def mod_OBIGT(*args, messages=True, **kwargs):
         modified.
     """
 
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
+    capture = __R_output()
+    capture.capture_r_output()
         
     if isinstance(args[0], pd.DataFrame):
         arg_list = list(args)
@@ -2055,7 +2079,7 @@ def mod_OBIGT(*args, messages=True, **kwargs):
     ispecies = CHNOSZ.mod_OBIGT(*args, **kwargs)
     
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
     
     return list(ispecies)
     
@@ -2103,13 +2127,13 @@ def info(species, state=None, check_it=True, messages=True):
     
     args["check.it"] = check_it
 
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
+    capture = __R_output()
+    capture.capture_r_output()
     
     a = CHNOSZ.info(**args)
     
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
     
     if output_is_df:
         return ro.conversion.rpy2py(a)
@@ -2220,13 +2244,13 @@ def subcrt(species, coeff=None, state=None,
     if IS != None:
         args["IS"] = _convert_to_RVector(IS, force_Rvec=False)
     
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
+    capture = __R_output()
+    capture.capture_r_output()
         
     a = CHNOSZ.subcrt(**args)
 
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
     
     if "warnings" in a.names:
         warn = a.rx2("warnings")[0] # subcrt's list includes warnings only if they appear
@@ -2365,13 +2389,13 @@ class thermo(object):
                 pass
             args.update({key:value})
         
-        if messages:
-            rpy2_logger.setLevel(logging.WARNING)
+        capture = __R_output()
+        capture.capture_r_output()
             
         t = CHNOSZ.thermo(**args)
 
         if messages:
-            rpy2_logger.setLevel(logging.ERROR)
+            for line in capture.stderr: print(line)
         
         for i, name in enumerate(t.names):
             if isinstance(t[i], ro.DataFrame) or isinstance(t[i], ro.Matrix):
@@ -2484,8 +2508,8 @@ def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
     pressures = _convert_to_RVector(pressures, force_Rvec=False)
     temperatures = _convert_to_RVector(temperatures, force_Rvec=False)
     
-    if messages:
-        rpy2_logger.setLevel(logging.WARNING)
+    capture = __R_output()
+    capture.capture_r_output()
 
     r_univariant = pkg_resources.resource_string(
         __name__, 'univariant.r').decode("utf-8")
@@ -2529,7 +2553,7 @@ def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
                                           minP=minP,
                                           maxP=maxP)
     if messages:
-        rpy2_logger.setLevel(logging.ERROR)
+        for line in capture.stderr: print(line)
 
     if len(a) == 3:
         warn = a[2][0] # subcrt's list includes warnings only if they appear

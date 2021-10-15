@@ -158,4 +158,4 @@ subcrt: 3 species at 2 values of T (ºC) and P (bar) (wet) [energy units: cal]
 
 ### More examples:
 
-For more examples, like plotting activity and predominance diagrams, check out the [pyCHNOSZ demo notebook](https://github.com/worm-portal/pyCHNOSZ/blob/master/test/pyCHNOSZ-demo.ipynb).
+For more examples, like plotting activity and predominance diagrams, check out the [pyCHNOSZ demo notebook](https://nbviewer.org/github/worm-portal/pyCHNOSZ/blob/master/test/pyCHNOSZ-demo.ipynb).
