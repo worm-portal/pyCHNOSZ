@@ -2228,10 +2228,15 @@ def subcrt(species, coeff=None, state=None,
     if messages:
         rpy2_logger.setLevel(logging.ERROR)
     
-    if len(a) == 3:
-        warn = a[2][0] # subcrt's list includes warnings only if they appear
+    if "warnings" in a.names:
+        warn = a.rx2("warnings")[0] # subcrt's list includes warnings only if they appear
     else:
         warn = None
+    
+    if "polymorphs" in a.names:
+        poly = a.rx2("polymorphs") # subcrt's list includes polymorphs only if they appear
+    else:
+        poly = None
     
     if not single_species:
         out_dict = {"reaction":ro.conversion.rpy2py(a[0]),
@@ -2244,8 +2249,10 @@ def subcrt(species, coeff=None, state=None,
             out_dict["out"][out_dict["species"].name[i]] = ro.conversion.rpy2py(df)
             i += 1
         
-    if warn != None:
+    if isinstance(warn, str):
         out_dict["warnings"] = warn
+    if isinstance(poly, pd.DataFrame):
+        out_dict["polymorphs"] = poly
     
     out = SubcrtOutput(out_dict)
     
