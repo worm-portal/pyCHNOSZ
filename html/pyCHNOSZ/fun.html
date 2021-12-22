@@ -88,7 +88,7 @@ def __r_inline_plot(width=600, height=520, dpi=150, plot_it=True):
         display(Image(data=data, format=&#39;png&#39;, embed=True))
 
 
-class __R_output(object):
+class R_output(object):
     
     def capture_r_output(self):
         &#34;&#34;&#34;
@@ -267,7 +267,7 @@ def solubility(iaq=None, in_terms_of=None, dissociate=False, find_IS=False,
             value = ro.FloatVector(value)
         args.update({key:value})
 
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
 
     s = CHNOSZ.solubility(**args)
@@ -369,7 +369,7 @@ def retrieve(elements=None, ligands=None, state=None, T=None, P=&#34;Psat&#34;,
     args = {&#39;elements&#39;:elements, &#39;ligands&#39;:ligands, &#39;state&#39;:state, &#39;T&#39;:T, &#39;P&#39;:P,
             &#39;add_charge&#39;:add_charge, &#39;hide_groups&#39;:hide_groups}
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
 
     out = CHNOSZ.retrieve(**args)
@@ -1177,7 +1177,7 @@ def water(property=None, T=298.15, P=&#34;Psat&#34;, P1=True, messages=True):
     
     args = {&#39;property&#39;:property, &#39;T&#39;:T, &#39;P&#39;:P, &#39;P1&#39;:P1}
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     out = CHNOSZ.water(**args)
@@ -1214,7 +1214,7 @@ def entropy(formula, messages=True):
     
     formula_R = _convert_to_RVector(formula, force_Rvec=False)
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
         
     out = CHNOSZ.entropy(formula_R)
@@ -1253,7 +1253,7 @@ def mass(formula, messages=True):
     
     formula_R = _convert_to_RVector(formula, force_Rvec=False)
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     out = CHNOSZ.mass(formula_R)
@@ -1291,7 +1291,7 @@ def zc(formula, messages=True):
     
     formula_R = _convert_to_RVector(formula, force_Rvec=False)
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     out = CHNOSZ.ZC(formula_R)
@@ -1344,7 +1344,7 @@ def makeup(formula, multiplier=1, sum=False, count_zero=False, messages=True):
     args = {&#39;formula&#39;:formula_R, &#34;multiplier&#34;:multiplier,
             &#34;sum&#34;:sum, &#34;count.zero&#34;:count_zero}
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
         
     out = CHNOSZ.makeup(**args)
@@ -1403,7 +1403,7 @@ def seq2aa(protein, sequence, messages=True):
     
     args = {&#39;protein&#39;:protein, &#39;sequence&#39;:sequence}
 
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     pout = CHNOSZ.seq2aa(**args)
@@ -1436,7 +1436,7 @@ def add_protein(aa, messages=True):
     aa = ro.conversion.py2rpy(aa)
     args = {&#39;aa&#39;:aa}
 
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     apout = CHNOSZ.add_protein(**args)
@@ -1489,7 +1489,7 @@ def equilibrate(aout, balance=None, loga_balance=None, ispecies=None,
     if loga_balance != None: args[&#39;loga.balance&#39;] = loga_balance
     if ispecies != None: args[&#39;ispecies&#39;] = _convert_to_RVector(ispecies)
 
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
         
     eout = CHNOSZ.equilibrate(**args)
@@ -1770,7 +1770,7 @@ def diagram(eout, ptype=&#39;auto&#39;, alpha=False, normalize=False,
     if main != None: args[&#34;main&#34;] = main
     if legend_x != None: args[&#34;legend.x&#34;] = legend_x
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
         
     with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
@@ -1872,7 +1872,7 @@ def affinity(property=None, sout=None, exceed_Ttr=False,
             value = ro.FloatVector(value)
         args.update({key:value})
         
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     a = CHNOSZ.affinity(**args)
@@ -1933,7 +1933,7 @@ def species(species=None, state=None, delete=False, add=False,
     args[&#34;delete&#34;] = delete
     args[&#34;index.return&#34;] = index_return
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     sout = CHNOSZ.species(**args)
@@ -1986,7 +1986,7 @@ def basis(species=None, state=None, logact=None, delete=False, messages=True):
     
     args[&#34;delete&#34;] = delete
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     bout = CHNOSZ.basis(**args)
@@ -2012,7 +2012,7 @@ def reset(messages=True):
     
     &#34;&#34;&#34;
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     CHNOSZ.reset()
@@ -2048,24 +2048,49 @@ def add_OBIGT(file, species=None, force=True, messages=True):
         A list of OBIGT database indices (ispecies) that have been added or
         modified.
     &#34;&#34;&#34;
-    
-    args={&#39;file&#39;:file}
-    
-    if species != None:
-        if not isinstance(species, list):
-            args[&#34;species&#34;] = species
-        else:
-            args[&#34;species&#34;] = _convert_to_RVector(species)
 
-    capture = __R_output()
-    capture.capture_r_output()
+    if isinstance(file, str):
+        if &#34;.csv&#34; not in file[-4:] or &#34;.CSV&#34; in file[-4:]:
+            raise Exception(&#34;File must be in .csv format&#34;)
+        else:
+            df = pd.read_csv(file, keep_default_na=False) # keep_default_na=False keeps NA in data file instead of converting them to NaN. NaNs cause errors when converting to an R dataframe with rpy2 3.4.5.
+    elif isinstance(file, pd.DataFrame):
+        df = file
+    else:
+        raise Exception(&#34;file parameter must be either the name of a .csv file &#34;
+                        &#34;to import, or a Pandas dataframe of thermodynamic data.&#34;)
+            
+    if df.shape[0] == 0:
+        raise Exception(&#34;file is empty&#34;)
     
-    ispecies = CHNOSZ.add_OBIGT(**args)
-    
-    if messages:
-        for line in capture.stderr: print(line)
-    
-    return list(ispecies)
+    OBIGT_cols = [&#39;name&#39;, &#39;abbrv&#39;, &#39;formula&#39;, &#39;state&#39;,
+                  &#39;ref1&#39;, &#39;ref2&#39;, &#39;date&#39;, &#39;E_units&#39;,
+                  &#39;G&#39;, &#39;H&#39;, &#39;S&#39;, &#39;Cp&#39;, &#39;V&#39;,
+                  &#39;a1.a&#39;, &#39;a2.b&#39;, &#39;a3.c&#39;, &#39;a4.d&#39;,
+                  &#39;c1.e&#39;, &#39;c2.f&#39;, &#39;omega.lambda&#39;, &#39;z.T&#39;]
+
+    if all(col in df.columns for col in OBIGT_cols):
+
+        df_mod_OBIGT = df[OBIGT_cols]
+
+        if species != None:
+            if isinstance(species, list):
+                df_mod_OBIGT = df_mod_OBIGT[df_mod_OBIGT[&#34;name&#34;].isin(species)]
+                
+            else:
+                raise Exception(&#34;species must be a list of names of species to load from file.&#34;)
+
+        if not force:
+            t = thermo()
+            df_mod_OBIGT = df_mod_OBIGT[~df_mod_OBIGT[&#34;name&#34;].isin(t.OBIGT.name)]
+            if df_mod_OBIGT.shape[0] == 0:
+                raise Exception(&#34;No species to add while force=False&#34;)
+                
+    else:
+        msg = &#34;The file must contain all of the columns: {}&#34;.format(str(OBIGT_cols))
+        raise Exception(msg)
+
+    return mod_OBIGT(df_mod_OBIGT, messages=messages)
 
 
 def mod_OBIGT(*args, messages=True, **kwargs):
@@ -2094,7 +2119,7 @@ def mod_OBIGT(*args, messages=True, **kwargs):
         modified.
     &#34;&#34;&#34;
 
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
         
     if isinstance(args[0], pd.DataFrame):
@@ -2155,7 +2180,7 @@ def info(species, state=None, check_it=True, messages=True):
     
     args[&#34;check.it&#34;] = check_it
 
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     a = CHNOSZ.info(**args)
@@ -2272,7 +2297,7 @@ def subcrt(species, coeff=None, state=None,
     if IS != None:
         args[&#34;IS&#34;] = _convert_to_RVector(IS, force_Rvec=False)
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
         
     a = CHNOSZ.subcrt(**args)
@@ -2350,7 +2375,7 @@ class SubcrtOutput(object):
          return getattr(self, item)
 
 
-class thermo(object):
+class thermo:
     
     &#34;&#34;&#34;
     Python wrapper for the thermo() object in CHNOSZ.
@@ -2417,7 +2442,7 @@ class thermo(object):
                 pass
             args.update({key:value})
         
-        capture = __R_output()
+        capture = R_output()
         capture.capture_r_output()
             
         t = CHNOSZ.thermo(**args)
@@ -2436,7 +2461,7 @@ class thermo(object):
                 attr = list(t[i])
                 if len(t[i]) == 1:
                     attr = attr[0]
-            elif t[i] == ro.r(&#34;NULL&#34;):
+            elif isinstance(t[i], rpy2.rinterface_lib.sexp.NULLType):
                 attr = None
             else:
                 attr = t[i]
@@ -2536,7 +2561,7 @@ def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
     pressures = _convert_to_RVector(pressures, force_Rvec=False)
     temperatures = _convert_to_RVector(temperatures, force_Rvec=False)
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
 
     r_univariant = pkg_resources.resource_string(
@@ -2716,8 +2741,8 @@ def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
     if title == None:
         react_grid = output[0][&#34;reaction&#34;]
         react_grid[&#34;name&#34;] = [name  if name != &#34;water&#34; else &#34;H2O&#34; for name in react_grid[&#34;name&#34;]] # replace any &#34;water&#34; with &#34;H2O&#34; in the written reaction
-        reactants = &#34; + &#34;.join([(str(-react_grid[&#34;coeff&#34;][i])+&#34; &#34; if -react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &lt; 0])
-        products = &#34; + &#34;.join([(str(react_grid[&#34;coeff&#34;][i])+&#34; &#34; if react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &gt; 0])
+        reactants = &#34; + &#34;.join([(str(-int(react_grid[&#34;coeff&#34;][i]) if react_grid[&#34;coeff&#34;][i].is_integer() else -react_grid[&#34;coeff&#34;][i])+&#34; &#34; if -react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &lt; 0])
+        products = &#34; + &#34;.join([(str(int(react_grid[&#34;coeff&#34;][i]) if react_grid[&#34;coeff&#34;][i].is_integer() else react_grid[&#34;coeff&#34;][i])+&#34; &#34; if react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &gt; 0])
         
         title = reactants + &#34; = &#34; + products
     
@@ -2886,24 +2911,49 @@ modified.</dd>
         A list of OBIGT database indices (ispecies) that have been added or
         modified.
     &#34;&#34;&#34;
-    
-    args={&#39;file&#39;:file}
-    
-    if species != None:
-        if not isinstance(species, list):
-            args[&#34;species&#34;] = species
-        else:
-            args[&#34;species&#34;] = _convert_to_RVector(species)
 
-    capture = __R_output()
-    capture.capture_r_output()
+    if isinstance(file, str):
+        if &#34;.csv&#34; not in file[-4:] or &#34;.CSV&#34; in file[-4:]:
+            raise Exception(&#34;File must be in .csv format&#34;)
+        else:
+            df = pd.read_csv(file, keep_default_na=False) # keep_default_na=False keeps NA in data file instead of converting them to NaN. NaNs cause errors when converting to an R dataframe with rpy2 3.4.5.
+    elif isinstance(file, pd.DataFrame):
+        df = file
+    else:
+        raise Exception(&#34;file parameter must be either the name of a .csv file &#34;
+                        &#34;to import, or a Pandas dataframe of thermodynamic data.&#34;)
+            
+    if df.shape[0] == 0:
+        raise Exception(&#34;file is empty&#34;)
     
-    ispecies = CHNOSZ.add_OBIGT(**args)
-    
-    if messages:
-        for line in capture.stderr: print(line)
-    
-    return list(ispecies)</code></pre>
+    OBIGT_cols = [&#39;name&#39;, &#39;abbrv&#39;, &#39;formula&#39;, &#39;state&#39;,
+                  &#39;ref1&#39;, &#39;ref2&#39;, &#39;date&#39;, &#39;E_units&#39;,
+                  &#39;G&#39;, &#39;H&#39;, &#39;S&#39;, &#39;Cp&#39;, &#39;V&#39;,
+                  &#39;a1.a&#39;, &#39;a2.b&#39;, &#39;a3.c&#39;, &#39;a4.d&#39;,
+                  &#39;c1.e&#39;, &#39;c2.f&#39;, &#39;omega.lambda&#39;, &#39;z.T&#39;]
+
+    if all(col in df.columns for col in OBIGT_cols):
+
+        df_mod_OBIGT = df[OBIGT_cols]
+
+        if species != None:
+            if isinstance(species, list):
+                df_mod_OBIGT = df_mod_OBIGT[df_mod_OBIGT[&#34;name&#34;].isin(species)]
+                
+            else:
+                raise Exception(&#34;species must be a list of names of species to load from file.&#34;)
+
+        if not force:
+            t = thermo()
+            df_mod_OBIGT = df_mod_OBIGT[~df_mod_OBIGT[&#34;name&#34;].isin(t.OBIGT.name)]
+            if df_mod_OBIGT.shape[0] == 0:
+                raise Exception(&#34;No species to add while force=False&#34;)
+                
+    else:
+        msg = &#34;The file must contain all of the columns: {}&#34;.format(str(OBIGT_cols))
+        raise Exception(msg)
+
+    return mod_OBIGT(df_mod_OBIGT, messages=messages)</code></pre>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.add_protein"><code class="name flex">
@@ -2950,7 +3000,7 @@ Add proteins to the OBIGT thermodynamic database.</p>
     aa = ro.conversion.py2rpy(aa)
     args = {&#39;aa&#39;:aa}
 
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     apout = CHNOSZ.add_protein(**args)
@@ -3088,7 +3138,7 @@ pH, T, P, Eh, &hellip;</dd>
             value = ro.FloatVector(value)
         args.update({key:value})
         
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     a = CHNOSZ.affinity(**args)
@@ -3637,7 +3687,7 @@ elemental composition.</dd>
     
     args[&#34;delete&#34;] = delete
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     bout = CHNOSZ.basis(**args)
@@ -4067,7 +4117,7 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
     if main != None: args[&#34;main&#34;] = main
     if legend_x != None: args[&#34;legend.x&#34;] = legend_x
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
         
     with __r_inline_plot(width=width, height=height, dpi=dpi, plot_it=plot_it):
@@ -4467,7 +4517,7 @@ Returns a list if <code>formula</code> is a list.</dd>
     
     formula_R = _convert_to_RVector(formula, force_Rvec=False)
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
         
     out = CHNOSZ.entropy(formula_R)
@@ -4555,7 +4605,7 @@ of formation of the species at unit activity.</p>
     if loga_balance != None: args[&#39;loga.balance&#39;] = loga_balance
     if ispecies != None: args[&#39;ispecies&#39;] = _convert_to_RVector(ispecies)
 
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
         
     eout = CHNOSZ.equilibrate(**args)
@@ -4692,7 +4742,7 @@ formulas.</dd>
     
     args[&#34;check.it&#34;] = check_it
 
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     a = CHNOSZ.info(**args)
@@ -4776,7 +4826,7 @@ Ignored if <code>formula</code> is not a list.</dd>
     args = {&#39;formula&#39;:formula_R, &#34;multiplier&#34;:multiplier,
             &#34;sum&#34;:sum, &#34;count.zero&#34;:count_zero}
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
         
     out = CHNOSZ.makeup(**args)
@@ -4857,7 +4907,7 @@ Returns a list if <code>formula</code> is a list.</dd>
     
     formula_R = _convert_to_RVector(formula, force_Rvec=False)
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     out = CHNOSZ.mass(formula_R)
@@ -4925,7 +4975,7 @@ modified.</dd>
         modified.
     &#34;&#34;&#34;
 
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
         
     if isinstance(args[0], pd.DataFrame):
@@ -5061,7 +5111,7 @@ computational settings, thermodynamic database, and system settings
     
     &#34;&#34;&#34;
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     CHNOSZ.reset()
@@ -5209,7 +5259,7 @@ and/or Cl, including charged species, but no other elements.</p>
     args = {&#39;elements&#39;:elements, &#39;ligands&#39;:ligands, &#39;state&#39;:state, &#39;T&#39;:T, &#39;P&#39;:P,
             &#39;add_charge&#39;:add_charge, &#39;hide_groups&#39;:hide_groups}
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
 
     out = CHNOSZ.retrieve(**args)
@@ -5286,7 +5336,7 @@ sequence.</p>
     
     args = {&#39;protein&#39;:protein, &#39;sequence&#39;:sequence}
 
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     pout = CHNOSZ.seq2aa(**args)
@@ -5372,7 +5422,7 @@ species in the OBIGT database.</dd>
             value = ro.FloatVector(value)
         args.update({key:value})
 
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
 
     s = CHNOSZ.solubility(**args)
@@ -5468,7 +5518,7 @@ species from basis species defined by <code><a title="pyCHNOSZ.fun.basis" href="
     args[&#34;delete&#34;] = delete
     args[&#34;index.return&#34;] = index_return
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     sout = CHNOSZ.species(**args)
@@ -5636,7 +5686,7 @@ mol kg^-1.</dd>
     if IS != None:
         args[&#34;IS&#34;] = _convert_to_RVector(IS, force_Rvec=False)
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
         
     a = CHNOSZ.subcrt(**args)
@@ -5873,7 +5923,7 @@ number of decimal places in logK, with a maximum default tolerance of
     pressures = _convert_to_RVector(pressures, force_Rvec=False)
     temperatures = _convert_to_RVector(temperatures, force_Rvec=False)
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
 
     r_univariant = pkg_resources.resource_string(
@@ -6105,8 +6155,8 @@ number of decimal places in logK, with a maximum default tolerance of
     if title == None:
         react_grid = output[0][&#34;reaction&#34;]
         react_grid[&#34;name&#34;] = [name  if name != &#34;water&#34; else &#34;H2O&#34; for name in react_grid[&#34;name&#34;]] # replace any &#34;water&#34; with &#34;H2O&#34; in the written reaction
-        reactants = &#34; + &#34;.join([(str(-react_grid[&#34;coeff&#34;][i])+&#34; &#34; if -react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &lt; 0])
-        products = &#34; + &#34;.join([(str(react_grid[&#34;coeff&#34;][i])+&#34; &#34; if react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &gt; 0])
+        reactants = &#34; + &#34;.join([(str(-int(react_grid[&#34;coeff&#34;][i]) if react_grid[&#34;coeff&#34;][i].is_integer() else -react_grid[&#34;coeff&#34;][i])+&#34; &#34; if -react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &lt; 0])
+        products = &#34; + &#34;.join([(str(int(react_grid[&#34;coeff&#34;][i]) if react_grid[&#34;coeff&#34;][i].is_integer() else react_grid[&#34;coeff&#34;][i])+&#34; &#34; if react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &gt; 0])
         
         title = reactants + &#34; = &#34; + products
     
@@ -6206,7 +6256,7 @@ returns a dictionary of calculated values.</dd>
     
     args = {&#39;property&#39;:property, &#39;T&#39;:T, &#39;P&#39;:P, &#39;P1&#39;:P1}
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     out = CHNOSZ.water(**args)
@@ -6265,7 +6315,7 @@ Returns a list if <code>formula</code> is a list.</dd>
     
     formula_R = _convert_to_RVector(formula, force_Rvec=False)
     
-    capture = __R_output()
+    capture = R_output()
     capture.capture_r_output()
     
     out = CHNOSZ.ZC(formula_R)
@@ -6285,6 +6335,73 @@ Returns a list if <code>formula</code> is a list.</dd>
 <section>
 <h2 class="section-title" id="header-classes">Classes</h2>
 <dl>
+<dt id="pyCHNOSZ.fun.R_output"><code class="flex name class">
+<span>class <span class="ident">R_output</span></span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class R_output(object):
+    
+    def capture_r_output(self):
+        &#34;&#34;&#34;
+        Capture and create a list of R console messages
+        &#34;&#34;&#34;
+        
+        # Record output #
+        self.stdout = []
+        self.stderr = []
+        
+        # Dummy functions #
+        def add_to_stdout(line): self.stdout.append(line)
+        def add_to_stderr(line): self.stderr.append(line)
+            
+        # Keep the old functions #
+        self.stdout_orig = rpy2.rinterface_lib.callbacks.consolewrite_print
+        self.stderr_orig = rpy2.rinterface_lib.callbacks.consolewrite_warnerror
+        
+        # Set the call backs #
+        rpy2.rinterface_lib.callbacks.consolewrite_print     = add_to_stdout
+        rpy2.rinterface_lib.callbacks.consolewrite_warnerror = add_to_stderr</code></pre>
+</details>
+<h3>Methods</h3>
+<dl>
+<dt id="pyCHNOSZ.fun.R_output.capture_r_output"><code class="name flex">
+<span>def <span class="ident">capture_r_output</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Capture and create a list of R console messages</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def capture_r_output(self):
+    &#34;&#34;&#34;
+    Capture and create a list of R console messages
+    &#34;&#34;&#34;
+    
+    # Record output #
+    self.stdout = []
+    self.stderr = []
+    
+    # Dummy functions #
+    def add_to_stdout(line): self.stdout.append(line)
+    def add_to_stderr(line): self.stderr.append(line)
+        
+    # Keep the old functions #
+    self.stdout_orig = rpy2.rinterface_lib.callbacks.consolewrite_print
+    self.stderr_orig = rpy2.rinterface_lib.callbacks.consolewrite_warnerror
+    
+    # Set the call backs #
+    rpy2.rinterface_lib.callbacks.consolewrite_print     = add_to_stdout
+    rpy2.rinterface_lib.callbacks.consolewrite_warnerror = add_to_stderr</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
 <dt id="pyCHNOSZ.fun.SubcrtOutput"><code class="flex name class">
 <span>class <span class="ident">SubcrtOutput</span></span>
 <span>(</span><span>args)</span>
@@ -6386,7 +6503,7 @@ define the species of interest.</dd>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">class thermo(object):
+<pre><code class="python">class thermo:
     
     &#34;&#34;&#34;
     Python wrapper for the thermo() object in CHNOSZ.
@@ -6453,7 +6570,7 @@ define the species of interest.</dd>
                 pass
             args.update({key:value})
         
-        capture = __R_output()
+        capture = R_output()
         capture.capture_r_output()
             
         t = CHNOSZ.thermo(**args)
@@ -6472,7 +6589,7 @@ define the species of interest.</dd>
                 attr = list(t[i])
                 if len(t[i]) == 1:
                     attr = attr[0]
-            elif t[i] == ro.r(&#34;NULL&#34;):
+            elif isinstance(t[i], rpy2.rinterface_lib.sexp.NULLType):
                 attr = None
             else:
                 attr = t[i]
@@ -6530,6 +6647,12 @@ define the species of interest.</dd>
 </li>
 <li><h3><a href="#header-classes">Classes</a></h3>
 <ul>
+<li>
+<h4><code><a title="pyCHNOSZ.fun.R_output" href="#pyCHNOSZ.fun.R_output">R_output</a></code></h4>
+<ul class="">
+<li><code><a title="pyCHNOSZ.fun.R_output.capture_r_output" href="#pyCHNOSZ.fun.R_output.capture_r_output">capture_r_output</a></code></li>
+</ul>
+</li>
 <li>
 <h4><code><a title="pyCHNOSZ.fun.SubcrtOutput" href="#pyCHNOSZ.fun.SubcrtOutput">SubcrtOutput</a></code></h4>
 </li>
