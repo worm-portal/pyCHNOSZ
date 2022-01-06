@@ -2049,20 +2049,47 @@ def add_OBIGT(file, species=None, force=True, messages=True):
         modified.
     &#34;&#34;&#34;
 
+    add_obigt_builtins = [&#34;SUPCRT92&#34;, &#34;AS04&#34;, &#34;DEW&#34;, &#34;OldAA&#34;,
+                          &#34;AkDi&#34;, &#34;SLOP98&#34;, &#34;Berman_cr&#34;, &#34;biotic_aq&#34;,
+                          &#34;H2O_aq&#34;, &#34;inorganic_aq&#34;, &#34;inorganic_cr&#34;,
+                          &#34;inorganic_gas&#34;, &#34;organic_aq&#34;, &#34;organic_cr&#34;,
+                          &#34;organic_gas&#34;, &#34;organic_liq&#34;]
+
     if isinstance(file, str):
-        if &#34;.csv&#34; not in file[-4:] or &#34;.CSV&#34; in file[-4:]:
+        
+        if file in add_obigt_builtins:
+            capture = R_output()
+            capture.capture_r_output()
+
+            args={&#39;file&#39;:file}
+
+            if species != None:
+                if not isinstance(species, list):
+                    args[&#34;species&#34;] = species
+                else:
+                    args[&#34;species&#34;] = _convert_to_RVector(species)
+
+            ispecies = CHNOSZ.add_OBIGT(**args)
+
+            if messages:
+                for line in capture.stderr: print(line)
+
+            return list(ispecies)
+        
+        elif &#34;.csv&#34; not in file[-4:] or &#34;.CSV&#34; in file[-4:]:
             raise Exception(&#34;File must be in .csv format&#34;)
         else:
             df = pd.read_csv(file, keep_default_na=False) # keep_default_na=False keeps NA in data file instead of converting them to NaN. NaNs cause errors when converting to an R dataframe with rpy2 3.4.5.
+            if df.shape[0] == 0:
+                raise Exception(&#34;file is empty&#34;)
     elif isinstance(file, pd.DataFrame):
         df = file
+        if df.shape[0] == 0:
+            raise Exception(&#34;file is empty&#34;)
     else:
         raise Exception(&#34;file parameter must be either the name of a .csv file &#34;
                         &#34;to import, or a Pandas dataframe of thermodynamic data.&#34;)
-            
-    if df.shape[0] == 0:
-        raise Exception(&#34;file is empty&#34;)
-    
+
     OBIGT_cols = [&#39;name&#39;, &#39;abbrv&#39;, &#39;formula&#39;, &#39;state&#39;,
                   &#39;ref1&#39;, &#39;ref2&#39;, &#39;date&#39;, &#39;E_units&#39;,
                   &#39;G&#39;, &#39;H&#39;, &#39;S&#39;, &#39;Cp&#39;, &#39;V&#39;,
@@ -2912,20 +2939,47 @@ modified.</dd>
         modified.
     &#34;&#34;&#34;
 
+    add_obigt_builtins = [&#34;SUPCRT92&#34;, &#34;AS04&#34;, &#34;DEW&#34;, &#34;OldAA&#34;,
+                          &#34;AkDi&#34;, &#34;SLOP98&#34;, &#34;Berman_cr&#34;, &#34;biotic_aq&#34;,
+                          &#34;H2O_aq&#34;, &#34;inorganic_aq&#34;, &#34;inorganic_cr&#34;,
+                          &#34;inorganic_gas&#34;, &#34;organic_aq&#34;, &#34;organic_cr&#34;,
+                          &#34;organic_gas&#34;, &#34;organic_liq&#34;]
+
     if isinstance(file, str):
-        if &#34;.csv&#34; not in file[-4:] or &#34;.CSV&#34; in file[-4:]:
+        
+        if file in add_obigt_builtins:
+            capture = R_output()
+            capture.capture_r_output()
+
+            args={&#39;file&#39;:file}
+
+            if species != None:
+                if not isinstance(species, list):
+                    args[&#34;species&#34;] = species
+                else:
+                    args[&#34;species&#34;] = _convert_to_RVector(species)
+
+            ispecies = CHNOSZ.add_OBIGT(**args)
+
+            if messages:
+                for line in capture.stderr: print(line)
+
+            return list(ispecies)
+        
+        elif &#34;.csv&#34; not in file[-4:] or &#34;.CSV&#34; in file[-4:]:
             raise Exception(&#34;File must be in .csv format&#34;)
         else:
             df = pd.read_csv(file, keep_default_na=False) # keep_default_na=False keeps NA in data file instead of converting them to NaN. NaNs cause errors when converting to an R dataframe with rpy2 3.4.5.
+            if df.shape[0] == 0:
+                raise Exception(&#34;file is empty&#34;)
     elif isinstance(file, pd.DataFrame):
         df = file
+        if df.shape[0] == 0:
+            raise Exception(&#34;file is empty&#34;)
     else:
         raise Exception(&#34;file parameter must be either the name of a .csv file &#34;
                         &#34;to import, or a Pandas dataframe of thermodynamic data.&#34;)
-            
-    if df.shape[0] == 0:
-        raise Exception(&#34;file is empty&#34;)
-    
+
     OBIGT_cols = [&#39;name&#39;, &#39;abbrv&#39;, &#39;formula&#39;, &#39;state&#39;,
                   &#39;ref1&#39;, &#39;ref2&#39;, &#39;date&#39;, &#39;E_units&#39;,
                   &#39;G&#39;, &#39;H&#39;, &#39;S&#39;, &#39;Cp&#39;, &#39;V&#39;,

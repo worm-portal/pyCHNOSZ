@@ -2021,20 +2021,47 @@ def add_OBIGT(file, species=None, force=True, messages=True):
         modified.
     """
 
+    add_obigt_builtins = ["SUPCRT92", "AS04", "DEW", "OldAA",
+                          "AkDi", "SLOP98", "Berman_cr", "biotic_aq",
+                          "H2O_aq", "inorganic_aq", "inorganic_cr",
+                          "inorganic_gas", "organic_aq", "organic_cr",
+                          "organic_gas", "organic_liq"]
+
     if isinstance(file, str):
-        if ".csv" not in file[-4:] or ".CSV" in file[-4:]:
+        
+        if file in add_obigt_builtins:
+            capture = R_output()
+            capture.capture_r_output()
+
+            args={'file':file}
+
+            if species != None:
+                if not isinstance(species, list):
+                    args["species"] = species
+                else:
+                    args["species"] = _convert_to_RVector(species)
+
+            ispecies = CHNOSZ.add_OBIGT(**args)
+
+            if messages:
+                for line in capture.stderr: print(line)
+
+            return list(ispecies)
+        
+        elif ".csv" not in file[-4:] or ".CSV" in file[-4:]:
             raise Exception("File must be in .csv format")
         else:
             df = pd.read_csv(file, keep_default_na=False) # keep_default_na=False keeps NA in data file instead of converting them to NaN. NaNs cause errors when converting to an R dataframe with rpy2 3.4.5.
+            if df.shape[0] == 0:
+                raise Exception("file is empty")
     elif isinstance(file, pd.DataFrame):
         df = file
+        if df.shape[0] == 0:
+            raise Exception("file is empty")
     else:
         raise Exception("file parameter must be either the name of a .csv file "
                         "to import, or a Pandas dataframe of thermodynamic data.")
-            
-    if df.shape[0] == 0:
-        raise Exception("file is empty")
-    
+
     OBIGT_cols = ['name', 'abbrv', 'formula', 'state',
                   'ref1', 'ref2', 'date', 'E_units',
                   'G', 'H', 'S', 'Cp', 'V',
