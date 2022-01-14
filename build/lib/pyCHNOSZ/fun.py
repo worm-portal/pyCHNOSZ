@@ -2740,8 +2740,8 @@ def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
     if title == None:
         react_grid = output[0]["reaction"]
         react_grid["name"] = [name  if name != "water" else "H2O" for name in react_grid["name"]] # replace any "water" with "H2O" in the written reaction
-        reactants = " + ".join([(str(-int(react_grid["coeff"][i]) if react_grid["coeff"][i].is_integer() else -react_grid["coeff"][i])+" " if -react_grid["coeff"][i] != 1 else "") + html_chemname_format(react_grid["name"][i]) for i in range(0, len(react_grid["name"])) if react_grid["coeff"][i] < 0])
-        products = " + ".join([(str(int(react_grid["coeff"][i]) if react_grid["coeff"][i].is_integer() else react_grid["coeff"][i])+" " if react_grid["coeff"][i] != 1 else "") + html_chemname_format(react_grid["name"][i]) for i in range(0, len(react_grid["name"])) if react_grid["coeff"][i] > 0])
+        reactants = " + ".join([(str(-int(react_grid["coeff"][i]) if isinstance(react_grid["coeff"][i], (int, np.integer)) else -react_grid["coeff"][i])+" " if -react_grid["coeff"][i] != 1 else "") + html_chemname_format(react_grid["name"][i]) for i in range(0, len(react_grid["name"])) if react_grid["coeff"][i] < 0])
+        products = " + ".join([(str(int(react_grid["coeff"][i]) if isinstance(react_grid["coeff"][i], (int, np.integer)) else react_grid["coeff"][i])+" " if react_grid["coeff"][i] != 1 else "") + html_chemname_format(react_grid["name"][i]) for i in range(0, len(react_grid["name"])) if react_grid["coeff"][i] > 0])
         
         title = reactants + " = " + products
     
