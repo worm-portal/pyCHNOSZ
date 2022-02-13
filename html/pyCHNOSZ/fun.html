@@ -1091,7 +1091,7 @@ def diagram_interactive(data, title=None,
     if plot_it:
         fig.show(config=config)
     
-    return df
+    return df, fig
 
 
 def _convert_to_RVector(value, force_Rvec=True):
@@ -1517,7 +1517,7 @@ def diagram(eout, ptype=&#39;auto&#39;, alpha=False, normalize=False,
             annotation=None, annotation_coords=[0,0],
             width=600, height=520, dpi=150,
             messages=True, interactive=False, save_as=None, save_format=None,
-            save_scale=1):
+            save_scale=1, fig_out=False):
     
     &#34;&#34;&#34;
     Python wrapper for the diagram() function in CHNOSZ.
@@ -1708,7 +1708,10 @@ def diagram(eout, ptype=&#39;auto&#39;, alpha=False, normalize=False,
     save_scale : numeric, default 1
         For interactive plots only (`interactive`=True). Multiply
         title/legend/axis/canvas sizes by this factor when saving the figure.
-    
+        
+    fig_out : bool, default False
+        Function output is a plotly figure? Ignored if `interactive` is False.
+        
     Returns
     -------
     a : rpy2.ListVector
@@ -1718,7 +1721,7 @@ def diagram(eout, ptype=&#39;auto&#39;, alpha=False, normalize=False,
     &#34;&#34;&#34;
     
     if interactive:
-        df = diagram_interactive(data=eout, title=main, annotation=annotation,
+        df, fig = diagram_interactive(data=eout, title=main, annotation=annotation,
                                  annotation_coords=annotation_coords,
                                  balance=balance,
                                  xlab=xlab, ylab=ylab,
@@ -1727,7 +1730,10 @@ def diagram(eout, ptype=&#39;auto&#39;, alpha=False, normalize=False,
                                  alpha=alpha, plot_it=plot_it,
                                  save_as=save_as, save_format=save_format,
                                  save_scale=save_scale, messages=messages)
-        return df
+        if fig_out:
+            return df, fig
+        else:
+            return df
     
     
     args = {&#39;eout&#39;:eout, &#39;type&#39;:ptype, &#39;alpha&#39;:alpha, &#39;normalize&#39;:normalize,
@@ -2768,8 +2774,8 @@ def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
     if title == None:
         react_grid = output[0][&#34;reaction&#34;]
         react_grid[&#34;name&#34;] = [name  if name != &#34;water&#34; else &#34;H2O&#34; for name in react_grid[&#34;name&#34;]] # replace any &#34;water&#34; with &#34;H2O&#34; in the written reaction
-        reactants = &#34; + &#34;.join([(str(-int(react_grid[&#34;coeff&#34;][i]) if react_grid[&#34;coeff&#34;][i].is_integer() else -react_grid[&#34;coeff&#34;][i])+&#34; &#34; if -react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &lt; 0])
-        products = &#34; + &#34;.join([(str(int(react_grid[&#34;coeff&#34;][i]) if react_grid[&#34;coeff&#34;][i].is_integer() else react_grid[&#34;coeff&#34;][i])+&#34; &#34; if react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &gt; 0])
+        reactants = &#34; + &#34;.join([(str(-int(react_grid[&#34;coeff&#34;][i]) if isinstance(react_grid[&#34;coeff&#34;][i], (int, np.integer)) else -react_grid[&#34;coeff&#34;][i])+&#34; &#34; if -react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &lt; 0])
+        products = &#34; + &#34;.join([(str(int(react_grid[&#34;coeff&#34;][i]) if isinstance(react_grid[&#34;coeff&#34;][i], (int, np.integer)) else react_grid[&#34;coeff&#34;][i])+&#34; &#34; if react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &gt; 0])
         
         title = reactants + &#34; = &#34; + products
     
@@ -3753,7 +3759,7 @@ elemental composition.</dd>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.diagram"><code class="name flex">
-<span>def <span class="ident">diagram</span></span>(<span>eout, ptype='auto', alpha=False, normalize=False, as_residue=False, balance=None, groups=None, xrange=None, mar=None, yline=None, side=[1, 2, 3, 4], ylog=True, xlim=None, ylim=None, xlab=None, ylab=None, cex=None, cex_names=None, cex_axis=None, lty=None, lwd=None, dotted=None, spline_method=None, contour_method=None, levels=None, col=None, col_names=None, fill=None, fill_NA='gray80', limit_water=None, names=None, format_names=True, bold=False, italic=False, font=None, family=None, adj=0.5, dx=0, dy=0, srt=0, min_area=0, main=None, legend_x=None, add=False, plot_it=True, tplot=True, annotation=None, annotation_coords=[0, 0], width=600, height=520, dpi=150, messages=True, interactive=False, save_as=None, save_format=None, save_scale=1)</span>
+<span>def <span class="ident">diagram</span></span>(<span>eout, ptype='auto', alpha=False, normalize=False, as_residue=False, balance=None, groups=None, xrange=None, mar=None, yline=None, side=[1, 2, 3, 4], ylog=True, xlim=None, ylim=None, xlab=None, ylab=None, cex=None, cex_names=None, cex_axis=None, lty=None, lwd=None, dotted=None, spline_method=None, contour_method=None, levels=None, col=None, col_names=None, fill=None, fill_NA='gray80', limit_water=None, names=None, format_names=True, bold=False, italic=False, font=None, family=None, adj=0.5, dx=0, dy=0, srt=0, min_area=0, main=None, legend_x=None, add=False, plot_it=True, tplot=True, annotation=None, annotation_coords=[0, 0], width=600, height=520, dpi=150, messages=True, interactive=False, save_as=None, save_format=None, save_scale=1, fig_out=False)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Python wrapper for the diagram() function in CHNOSZ.
@@ -3889,6 +3895,8 @@ Only 'png', 'svg', 'jpeg', and 'webp' can be downloaded with the
 <dt><strong><code>save_scale</code></strong> :&ensp;<code>numeric</code>, default <code>1</code></dt>
 <dd>For interactive plots only (<code>interactive</code>=True). Multiply
 title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
+<dt><strong><code>fig_out</code></strong> :&ensp;<code>bool</code>, default <code>False</code></dt>
+<dd>Function output is a plotly figure? Ignored if <code>interactive</code> is False.</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
@@ -3918,7 +3926,7 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
             annotation=None, annotation_coords=[0,0],
             width=600, height=520, dpi=150,
             messages=True, interactive=False, save_as=None, save_format=None,
-            save_scale=1):
+            save_scale=1, fig_out=False):
     
     &#34;&#34;&#34;
     Python wrapper for the diagram() function in CHNOSZ.
@@ -4109,7 +4117,10 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
     save_scale : numeric, default 1
         For interactive plots only (`interactive`=True). Multiply
         title/legend/axis/canvas sizes by this factor when saving the figure.
-    
+        
+    fig_out : bool, default False
+        Function output is a plotly figure? Ignored if `interactive` is False.
+        
     Returns
     -------
     a : rpy2.ListVector
@@ -4119,7 +4130,7 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
     &#34;&#34;&#34;
     
     if interactive:
-        df = diagram_interactive(data=eout, title=main, annotation=annotation,
+        df, fig = diagram_interactive(data=eout, title=main, annotation=annotation,
                                  annotation_coords=annotation_coords,
                                  balance=balance,
                                  xlab=xlab, ylab=ylab,
@@ -4128,7 +4139,10 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
                                  alpha=alpha, plot_it=plot_it,
                                  save_as=save_as, save_format=save_format,
                                  save_scale=save_scale, messages=messages)
-        return df
+        if fig_out:
+            return df, fig
+        else:
+            return df
     
     
     args = {&#39;eout&#39;:eout, &#39;type&#39;:ptype, &#39;alpha&#39;:alpha, &#39;normalize&#39;:normalize,
@@ -4520,7 +4534,7 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
     if plot_it:
         fig.show(config=config)
     
-    return df</code></pre>
+    return df, fig</code></pre>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.entropy"><code class="name flex">
@@ -6209,8 +6223,8 @@ number of decimal places in logK, with a maximum default tolerance of
     if title == None:
         react_grid = output[0][&#34;reaction&#34;]
         react_grid[&#34;name&#34;] = [name  if name != &#34;water&#34; else &#34;H2O&#34; for name in react_grid[&#34;name&#34;]] # replace any &#34;water&#34; with &#34;H2O&#34; in the written reaction
-        reactants = &#34; + &#34;.join([(str(-int(react_grid[&#34;coeff&#34;][i]) if react_grid[&#34;coeff&#34;][i].is_integer() else -react_grid[&#34;coeff&#34;][i])+&#34; &#34; if -react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &lt; 0])
-        products = &#34; + &#34;.join([(str(int(react_grid[&#34;coeff&#34;][i]) if react_grid[&#34;coeff&#34;][i].is_integer() else react_grid[&#34;coeff&#34;][i])+&#34; &#34; if react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &gt; 0])
+        reactants = &#34; + &#34;.join([(str(-int(react_grid[&#34;coeff&#34;][i]) if isinstance(react_grid[&#34;coeff&#34;][i], (int, np.integer)) else -react_grid[&#34;coeff&#34;][i])+&#34; &#34; if -react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &lt; 0])
+        products = &#34; + &#34;.join([(str(int(react_grid[&#34;coeff&#34;][i]) if isinstance(react_grid[&#34;coeff&#34;][i], (int, np.integer)) else react_grid[&#34;coeff&#34;][i])+&#34; &#34; if react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &gt; 0])
         
         title = reactants + &#34; = &#34; + products
     

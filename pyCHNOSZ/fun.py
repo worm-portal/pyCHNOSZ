@@ -1063,7 +1063,7 @@ def diagram_interactive(data, title=None,
     if plot_it:
         fig.show(config=config)
     
-    return df
+    return df, fig
 
 
 def _convert_to_RVector(value, force_Rvec=True):
@@ -1489,7 +1489,7 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
             annotation=None, annotation_coords=[0,0],
             width=600, height=520, dpi=150,
             messages=True, interactive=False, save_as=None, save_format=None,
-            save_scale=1):
+            save_scale=1, fig_out=False):
     
     """
     Python wrapper for the diagram() function in CHNOSZ.
@@ -1680,7 +1680,10 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
     save_scale : numeric, default 1
         For interactive plots only (`interactive`=True). Multiply
         title/legend/axis/canvas sizes by this factor when saving the figure.
-    
+        
+    fig_out : bool, default False
+        Function output is a plotly figure? Ignored if `interactive` is False.
+        
     Returns
     -------
     a : rpy2.ListVector
@@ -1690,7 +1693,7 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
     """
     
     if interactive:
-        df = diagram_interactive(data=eout, title=main, annotation=annotation,
+        df, fig = diagram_interactive(data=eout, title=main, annotation=annotation,
                                  annotation_coords=annotation_coords,
                                  balance=balance,
                                  xlab=xlab, ylab=ylab,
@@ -1699,7 +1702,10 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
                                  alpha=alpha, plot_it=plot_it,
                                  save_as=save_as, save_format=save_format,
                                  save_scale=save_scale, messages=messages)
-        return df
+        if fig_out:
+            return df, fig
+        else:
+            return df
     
     
     args = {'eout':eout, 'type':ptype, 'alpha':alpha, 'normalize':normalize,
