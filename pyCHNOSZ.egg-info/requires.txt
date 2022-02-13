@@ -1,0 +1,6 @@
+rpy2
+pandas
+ipython
+plotly
+simplegeneric
+chemparse
