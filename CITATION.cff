@@ -7,11 +7,11 @@ authors:
     given-names: Grayson
     orcid: "https://orcid.org/0000-0002-7670-9273"
 
-cff-version: "0.1.6"
+cff-version: "0.1.7"
 license: MIT
 message: "If you use this software, please cite it using these metadata."
 repository-code: "https://github.com/worm-portal/AqEquil"
 title: "pyCHNOSZ: Python wrapper for the thermodynamic package CHNOSZ"
-version: "0.8.6"
-date-released: 2022-02-13
+version: "0.8.7"
+date-released: 2022-03-07
 ...

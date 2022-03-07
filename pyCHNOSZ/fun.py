@@ -1013,6 +1013,9 @@ def diagram_interactive(data, title=None,
         fig.update(data=[{'customdata': dmap_names,
             'hovertemplate': xlab+': %{x}<br>'+ylab+': %{y}<br>Region: %{customdata}<extra></extra>'}])
 
+        if colormap == 'none':
+            colormap = [[0, 'white'], [1, 'white']]
+        
         fig.update_traces(dict(showscale=False, 
                                coloraxis=None, 
                                colorscale=colormap),
@@ -2057,7 +2060,7 @@ def add_OBIGT(file, species=None, force=True, messages=True):
         elif ".csv" not in file[-4:] or ".CSV" in file[-4:]:
             raise Exception("File must be in .csv format")
         else:
-            df = pd.read_csv(file, keep_default_na=False) # keep_default_na=False keeps NA in data file instead of converting them to NaN. NaNs cause errors when converting to an R dataframe with rpy2 3.4.5.
+            df = pd.read_csv(file, keep_default_na=False, na_values=['NA']) # keep_default_na=False keeps NA in data file instead of converting them to NaN. NaNs cause errors when converting to an R dataframe with rpy2 3.4.5.
             if df.shape[0] == 0:
                 raise Exception("file is empty")
     elif isinstance(file, pd.DataFrame):
@@ -2095,6 +2098,12 @@ def add_OBIGT(file, species=None, force=True, messages=True):
         msg = "The file must contain all of the columns: {}".format(str(OBIGT_cols))
         raise Exception(msg)
 
+    numeric_cols = ['G', 'H', 'S', 'Cp', 'V',
+                  'a1.a', 'a2.b', 'a3.c', 'a4.d',
+                  'c1.e', 'c2.f', 'omega.lambda', 'z.T']
+    
+    df_mod_OBIGT[numeric_cols] = df_mod_OBIGT[numeric_cols].apply(pd.to_numeric)
+        
     return mod_OBIGT(df_mod_OBIGT, messages=messages)
 
 

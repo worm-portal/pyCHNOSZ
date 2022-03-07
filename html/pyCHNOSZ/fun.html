@@ -1041,6 +1041,9 @@ def diagram_interactive(data, title=None,
         fig.update(data=[{&#39;customdata&#39;: dmap_names,
             &#39;hovertemplate&#39;: xlab+&#39;: %{x}&lt;br&gt;&#39;+ylab+&#39;: %{y}&lt;br&gt;Region: %{customdata}&lt;extra&gt;&lt;/extra&gt;&#39;}])
 
+        if colormap == &#39;none&#39;:
+            colormap = [[0, &#39;white&#39;], [1, &#39;white&#39;]]
+        
         fig.update_traces(dict(showscale=False, 
                                coloraxis=None, 
                                colorscale=colormap),
@@ -2085,7 +2088,7 @@ def add_OBIGT(file, species=None, force=True, messages=True):
         elif &#34;.csv&#34; not in file[-4:] or &#34;.CSV&#34; in file[-4:]:
             raise Exception(&#34;File must be in .csv format&#34;)
         else:
-            df = pd.read_csv(file, keep_default_na=False) # keep_default_na=False keeps NA in data file instead of converting them to NaN. NaNs cause errors when converting to an R dataframe with rpy2 3.4.5.
+            df = pd.read_csv(file, keep_default_na=False, na_values=[&#39;NA&#39;]) # keep_default_na=False keeps NA in data file instead of converting them to NaN. NaNs cause errors when converting to an R dataframe with rpy2 3.4.5.
             if df.shape[0] == 0:
                 raise Exception(&#34;file is empty&#34;)
     elif isinstance(file, pd.DataFrame):
@@ -2123,6 +2126,12 @@ def add_OBIGT(file, species=None, force=True, messages=True):
         msg = &#34;The file must contain all of the columns: {}&#34;.format(str(OBIGT_cols))
         raise Exception(msg)
 
+    numeric_cols = [&#39;G&#39;, &#39;H&#39;, &#39;S&#39;, &#39;Cp&#39;, &#39;V&#39;,
+                  &#39;a1.a&#39;, &#39;a2.b&#39;, &#39;a3.c&#39;, &#39;a4.d&#39;,
+                  &#39;c1.e&#39;, &#39;c2.f&#39;, &#39;omega.lambda&#39;, &#39;z.T&#39;]
+    
+    df_mod_OBIGT[numeric_cols] = df_mod_OBIGT[numeric_cols].apply(pd.to_numeric)
+        
     return mod_OBIGT(df_mod_OBIGT, messages=messages)
 
 
@@ -2975,7 +2984,7 @@ modified.</dd>
         elif &#34;.csv&#34; not in file[-4:] or &#34;.CSV&#34; in file[-4:]:
             raise Exception(&#34;File must be in .csv format&#34;)
         else:
-            df = pd.read_csv(file, keep_default_na=False) # keep_default_na=False keeps NA in data file instead of converting them to NaN. NaNs cause errors when converting to an R dataframe with rpy2 3.4.5.
+            df = pd.read_csv(file, keep_default_na=False, na_values=[&#39;NA&#39;]) # keep_default_na=False keeps NA in data file instead of converting them to NaN. NaNs cause errors when converting to an R dataframe with rpy2 3.4.5.
             if df.shape[0] == 0:
                 raise Exception(&#34;file is empty&#34;)
     elif isinstance(file, pd.DataFrame):
@@ -3013,6 +3022,12 @@ modified.</dd>
         msg = &#34;The file must contain all of the columns: {}&#34;.format(str(OBIGT_cols))
         raise Exception(msg)
 
+    numeric_cols = [&#39;G&#39;, &#39;H&#39;, &#39;S&#39;, &#39;Cp&#39;, &#39;V&#39;,
+                  &#39;a1.a&#39;, &#39;a2.b&#39;, &#39;a3.c&#39;, &#39;a4.d&#39;,
+                  &#39;c1.e&#39;, &#39;c2.f&#39;, &#39;omega.lambda&#39;, &#39;z.T&#39;]
+    
+    df_mod_OBIGT[numeric_cols] = df_mod_OBIGT[numeric_cols].apply(pd.to_numeric)
+        
     return mod_OBIGT(df_mod_OBIGT, messages=messages)</code></pre>
 </details>
 </dd>
@@ -4484,6 +4499,9 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
         fig.update(data=[{&#39;customdata&#39;: dmap_names,
             &#39;hovertemplate&#39;: xlab+&#39;: %{x}&lt;br&gt;&#39;+ylab+&#39;: %{y}&lt;br&gt;Region: %{customdata}&lt;extra&gt;&lt;/extra&gt;&#39;}])
 
+        if colormap == &#39;none&#39;:
+            colormap = [[0, &#39;white&#39;], [1, &#39;white&#39;]]
+        
         fig.update_traces(dict(showscale=False, 
                                coloraxis=None, 
                                colorscale=colormap),
