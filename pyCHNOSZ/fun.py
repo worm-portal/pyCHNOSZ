@@ -12,6 +12,7 @@ import statistics
 import pkg_resources
 import decimal
 import chemparse
+import copy
 
 import rpy2.rinterface_lib.callbacks
 import logging
@@ -791,7 +792,7 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     fig.show(config=config)
 
     
-def diagram_interactive(data, title=None,
+def diagram_interactive(data, title=None, borders=True,
                         annotation=None, annotation_coords=[0, 0],
                         balance=None, xlab=None, ylab=None, colormap="viridis",
                         width=600, height=520, alpha=False, messages=True,
@@ -807,6 +808,9 @@ def diagram_interactive(data, title=None,
     
     title : str, optional
         Title of the plot.
+    
+    borders : bool, default True
+        Show lines that indicate borders between regions?
     
     annotation : str, optional
         Annotation to add to the plot.
@@ -1062,6 +1066,96 @@ def diagram_interactive(data, title=None,
                                              'scale': save_scale,
                                           },
                  }
+        
+#         if borders:
+            
+#             unique_x_vals = list(dict.fromkeys(df["pH"]))
+#             unique_y_vals = list(dict.fromkeys(df["T"]))
+            
+#             def mov_mean(numbers=[], window_size=2):
+#                 i = 0
+#                 moving_averages = []
+#                 while i < len(numbers) - window_size + 1:
+#                     this_window = numbers[i : i + window_size]
+
+#                     window_average = sum(this_window) / window_size
+#                     moving_averages.append(window_average)
+#                     i += 1
+#                 return moving_averages
+            
+#             x_mov_mean = mov_mean(unique_x_vals)
+#             y_mov_mean = mov_mean(unique_y_vals)
+
+#             x_plot_min = x_mov_mean[0] - (x_mov_mean[1] - x_mov_mean[0])
+#             y_plot_min = y_mov_mean[0] - (y_mov_mean[1] - y_mov_mean[0])
+
+#             x_plot_max = x_mov_mean[-1] + (x_mov_mean[1] - x_mov_mean[0])
+#             y_plot_max = y_mov_mean[-1] + (y_mov_mean[1] - y_mov_mean[0])
+
+#             x_vals_border = [x_plot_min] + x_mov_mean + [x_plot_max]
+#             y_vals_border = [y_plot_min] + y_mov_mean + [y_plot_max]
+            
+#             data = np.array(df.pred)
+#             shape = (len(xvals), len(yvals))
+#             dmap = data.reshape(shape)
+            
+#             def find_line(dmap, row_index):
+#                 return [i for i in range(0, len(dmap[row_index])-1) if dmap[row_index][i] != dmap[row_index][i+1]]
+
+#             nrows, ncols = dmap.shape
+#             vlines = []
+#             for row_i in range(0, nrows):
+#                 vlines.append(find_line(dmap, row_i))
+
+#             dmap_transposed = dmap.transpose()
+#             nrows, ncols = dmap_transposed.shape
+#             hlines = []
+#             for row_i in range(0, nrows):
+#                 hlines.append(find_line(dmap_transposed, row_i))
+#             y_coord_list_vertical = []
+#             x_coord_list_vertical = []
+#             for i,row in enumerate(vlines):
+#                 for line in row:
+#                     x_coord_list_vertical += [x_vals_border[line+1], x_vals_border[line+1], np.nan]
+#                     y_coord_list_vertical += [y_vals_border[i], y_vals_border[i+1], np.nan]
+
+#             y_coord_list_horizontal = []
+#             x_coord_list_horizontal = []
+#             for i,col in enumerate(hlines):
+#                 for line in col:
+#                     y_coord_list_horizontal += [y_vals_border[line+1], y_vals_border[line+1], np.nan]
+#                     x_coord_list_horizontal += [x_vals_border[i], x_vals_border[i+1], np.nan]
+
+#             fig.add_trace(
+#                 go.Scatter(
+#               mode= 'lines',
+#               x= x_coord_list_horizontal,
+#               y= y_coord_list_horizontal,
+#               line= {
+#                 "width": 0.5,
+#                 "color": 'black'
+#               },
+#               hoverinfo= 'skip',
+#               showlegend=False,
+#                 )
+#             )
+#             fig.add_trace(
+#                 go.Scatter(
+#               mode= 'lines',
+#               x= x_coord_list_vertical,
+#               y= y_coord_list_vertical,
+#               line= {
+#                 "width": 0.5,
+#                 "color": 'black'
+#               },
+#               hoverinfo= 'skip',
+#               showlegend=False,
+#                 )
+#             )
+        
+#             fig.update_yaxes(range=[min(yvals), max(yvals)], autorange=False, mirror=True)
+#             fig.update_xaxes(range=[min(xvals), max(xvals)], autorange=False, mirror=True)
+        
         
     if plot_it:
         fig.show(config=config)
@@ -1696,7 +1790,13 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
     """
     
     if interactive:
-        df, fig = diagram_interactive(data=eout, title=main, annotation=annotation,
+        if lwd == 0:
+            borders = False
+        else:
+            borders = True
+            
+        df, fig = diagram_interactive(data=eout, title=main, borders=borders,
+                                 annotation=annotation,
                                  annotation_coords=annotation_coords,
                                  balance=balance,
                                  xlab=xlab, ylab=ylab,
@@ -2079,7 +2179,7 @@ def add_OBIGT(file, species=None, force=True, messages=True):
 
     if all(col in df.columns for col in OBIGT_cols):
 
-        df_mod_OBIGT = df[OBIGT_cols]
+        df_mod_OBIGT = copy.deepcopy(df[OBIGT_cols])
 
         if species != None:
             if isinstance(species, list):
@@ -2103,7 +2203,7 @@ def add_OBIGT(file, species=None, force=True, messages=True):
                   'c1.e', 'c2.f', 'omega.lambda', 'z.T']
     
     df_mod_OBIGT[numeric_cols] = df_mod_OBIGT[numeric_cols].apply(pd.to_numeric)
-        
+    
     return mod_OBIGT(df_mod_OBIGT, messages=messages)
 
 
@@ -2137,8 +2237,20 @@ def mod_OBIGT(*args, messages=True, **kwargs):
     capture.capture_r_output()
         
     if isinstance(args[0], pd.DataFrame):
+        
+        for col in args[0].columns:
+            if sum(args[0][col].isna()) > 0 and args[0][col].dtype == "O":
+                if messages:
+                    print("mod_OBIGT Warning: The column " + str(col) + " "
+                          "has dtype 'object' but contains NA values that "
+                          "can be interpreted as 'float'. Removing NA values.")
+                args[0][col] = args[0][col].fillna('')
+        
+        
         arg_list = list(args)
+        
         arg_list[0] = ro.conversion.py2rpy(arg_list[0])
+        
         args = tuple(arg_list)
     else:
         pass
