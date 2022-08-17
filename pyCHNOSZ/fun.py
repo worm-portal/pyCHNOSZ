@@ -792,7 +792,7 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     fig.show(config=config)
 
     
-def diagram_interactive(data, title=None, borders=True,
+def diagram_interactive(data, title=None, borders=0,
                         annotation=None, annotation_coords=[0, 0],
                         balance=None, xlab=None, ylab=None, colormap="viridis",
                         width=600, height=520, alpha=False, messages=True,
@@ -809,8 +809,10 @@ def diagram_interactive(data, title=None, borders=True,
     title : str, optional
         Title of the plot.
     
-    borders : bool, default True
-        Show lines that indicate borders between regions?
+    borders : float, default 0
+        If set to a value greater than 0, shows lines that indicate borders
+        between regions in predominance diagrams. Value indicates thickness
+        of the border, in pixels.
     
     annotation : str, optional
         Annotation to add to the plot.
@@ -1067,94 +1069,94 @@ def diagram_interactive(data, title=None, borders=True,
                                           },
                  }
         
-#         if borders:
+        if borders > 0:
             
-#             unique_x_vals = list(dict.fromkeys(df["pH"]))
-#             unique_y_vals = list(dict.fromkeys(df["T"]))
+            unique_x_vals = list(dict.fromkeys(df[xvar]))
+            unique_y_vals = list(dict.fromkeys(df[yvar]))
             
-#             def mov_mean(numbers=[], window_size=2):
-#                 i = 0
-#                 moving_averages = []
-#                 while i < len(numbers) - window_size + 1:
-#                     this_window = numbers[i : i + window_size]
+            def mov_mean(numbers=[], window_size=2):
+                i = 0
+                moving_averages = []
+                while i < len(numbers) - window_size + 1:
+                    this_window = numbers[i : i + window_size]
 
-#                     window_average = sum(this_window) / window_size
-#                     moving_averages.append(window_average)
-#                     i += 1
-#                 return moving_averages
+                    window_average = sum(this_window) / window_size
+                    moving_averages.append(window_average)
+                    i += 1
+                return moving_averages
             
-#             x_mov_mean = mov_mean(unique_x_vals)
-#             y_mov_mean = mov_mean(unique_y_vals)
+            x_mov_mean = mov_mean(unique_x_vals)
+            y_mov_mean = mov_mean(unique_y_vals)
 
-#             x_plot_min = x_mov_mean[0] - (x_mov_mean[1] - x_mov_mean[0])
-#             y_plot_min = y_mov_mean[0] - (y_mov_mean[1] - y_mov_mean[0])
+            x_plot_min = x_mov_mean[0] - (x_mov_mean[1] - x_mov_mean[0])
+            y_plot_min = y_mov_mean[0] - (y_mov_mean[1] - y_mov_mean[0])
 
-#             x_plot_max = x_mov_mean[-1] + (x_mov_mean[1] - x_mov_mean[0])
-#             y_plot_max = y_mov_mean[-1] + (y_mov_mean[1] - y_mov_mean[0])
+            x_plot_max = x_mov_mean[-1] + (x_mov_mean[1] - x_mov_mean[0])
+            y_plot_max = y_mov_mean[-1] + (y_mov_mean[1] - y_mov_mean[0])
 
-#             x_vals_border = [x_plot_min] + x_mov_mean + [x_plot_max]
-#             y_vals_border = [y_plot_min] + y_mov_mean + [y_plot_max]
+            x_vals_border = [x_plot_min] + x_mov_mean + [x_plot_max]
+            y_vals_border = [y_plot_min] + y_mov_mean + [y_plot_max]
             
-#             data = np.array(df.pred)
-#             shape = (len(xvals), len(yvals))
-#             dmap = data.reshape(shape)
+            data = np.array(df.pred)
+            shape = (len(xvals), len(yvals))
+            dmap = data.reshape(shape)
             
-#             def find_line(dmap, row_index):
-#                 return [i for i in range(0, len(dmap[row_index])-1) if dmap[row_index][i] != dmap[row_index][i+1]]
+            def find_line(dmap, row_index):
+                return [i for i in range(0, len(dmap[row_index])-1) if dmap[row_index][i] != dmap[row_index][i+1]]
 
-#             nrows, ncols = dmap.shape
-#             vlines = []
-#             for row_i in range(0, nrows):
-#                 vlines.append(find_line(dmap, row_i))
+            nrows, ncols = dmap.shape
+            vlines = []
+            for row_i in range(0, nrows):
+                vlines.append(find_line(dmap, row_i))
 
-#             dmap_transposed = dmap.transpose()
-#             nrows, ncols = dmap_transposed.shape
-#             hlines = []
-#             for row_i in range(0, nrows):
-#                 hlines.append(find_line(dmap_transposed, row_i))
-#             y_coord_list_vertical = []
-#             x_coord_list_vertical = []
-#             for i,row in enumerate(vlines):
-#                 for line in row:
-#                     x_coord_list_vertical += [x_vals_border[line+1], x_vals_border[line+1], np.nan]
-#                     y_coord_list_vertical += [y_vals_border[i], y_vals_border[i+1], np.nan]
+            dmap_transposed = dmap.transpose()
+            nrows, ncols = dmap_transposed.shape
+            hlines = []
+            for row_i in range(0, nrows):
+                hlines.append(find_line(dmap_transposed, row_i))
+            y_coord_list_vertical = []
+            x_coord_list_vertical = []
+            for i,row in enumerate(vlines):
+                for line in row:
+                    x_coord_list_vertical += [x_vals_border[line+1], x_vals_border[line+1], np.nan]
+                    y_coord_list_vertical += [y_vals_border[i], y_vals_border[i+1], np.nan]
 
-#             y_coord_list_horizontal = []
-#             x_coord_list_horizontal = []
-#             for i,col in enumerate(hlines):
-#                 for line in col:
-#                     y_coord_list_horizontal += [y_vals_border[line+1], y_vals_border[line+1], np.nan]
-#                     x_coord_list_horizontal += [x_vals_border[i], x_vals_border[i+1], np.nan]
-
-#             fig.add_trace(
-#                 go.Scatter(
-#               mode= 'lines',
-#               x= x_coord_list_horizontal,
-#               y= y_coord_list_horizontal,
-#               line= {
-#                 "width": 0.5,
-#                 "color": 'black'
-#               },
-#               hoverinfo= 'skip',
-#               showlegend=False,
-#                 )
-#             )
-#             fig.add_trace(
-#                 go.Scatter(
-#               mode= 'lines',
-#               x= x_coord_list_vertical,
-#               y= y_coord_list_vertical,
-#               line= {
-#                 "width": 0.5,
-#                 "color": 'black'
-#               },
-#               hoverinfo= 'skip',
-#               showlegend=False,
-#                 )
-#             )
+            y_coord_list_horizontal = []
+            x_coord_list_horizontal = []
+            for i,col in enumerate(hlines):
+                for line in col:
+                    y_coord_list_horizontal += [y_vals_border[line+1], y_vals_border[line+1], np.nan]
+                    x_coord_list_horizontal += [x_vals_border[i], x_vals_border[i+1], np.nan]
+                    
+            fig.add_trace(
+                go.Scatter(
+              mode= 'lines',
+              x= x_coord_list_horizontal,
+              y= y_coord_list_horizontal,
+              line= {
+                "width": borders,
+                "color": 'black'
+              },
+              hoverinfo= 'skip',
+              showlegend=False,
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+              mode= 'lines',
+              x= x_coord_list_vertical,
+              y= y_coord_list_vertical,
+              line= {
+                "width": borders,
+                "color": 'black'
+              },
+              hoverinfo= 'skip',
+              showlegend=False,
+                )
+            )
         
-#             fig.update_yaxes(range=[min(yvals), max(yvals)], autorange=False, mirror=True)
-#             fig.update_xaxes(range=[min(xvals), max(xvals)], autorange=False, mirror=True)
+            fig.update_yaxes(range=[min(yvals), max(yvals)], autorange=False, mirror=True)
+            fig.update_xaxes(range=[min(xvals), max(xvals)], autorange=False, mirror=True)
         
         
     if plot_it:
@@ -1789,11 +1791,12 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
         Dictionary of arguments supplied to `diagram`.
     """
     
+    if lwd == None:
+        borders = 0
+    else:
+        borders = lwd
+    
     if interactive:
-        if lwd == 0:
-            borders = False
-        else:
-            borders = True
             
         df, fig = diagram_interactive(data=eout, title=main, borders=borders,
                                  annotation=annotation,
