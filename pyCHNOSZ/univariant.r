@@ -124,6 +124,11 @@ uc_solveT <- function(logK, species, state, coeff,
           maxT <- init_calc$T[i+1]
           logK_check_complete <- TRUE
           break
+        } else if ((logK > 0) & (logK >= logKmin) & (logK <= logKmax)){
+          minT <- init_calc$T[i]
+          maxT <- init_calc$T[i+1]
+          logK_check_complete <- TRUE
+          break
         } else if ((i == (length(init_calc$logK)-1)) & (!logK_check_complete)){
           if(!("Warning" %in% colnames(df))){
             df$Warning <-PlH # create 'Warning' column
@@ -254,6 +259,11 @@ uc_solveP <- function(logK, species, state, coeff,
           logK_check_complete <- TRUE
           break
         } else if ((logK > 0) & (logK >= logKmin) & (logK <= logKmax)){
+          minP <- init_calc$P[i]
+          maxP <- init_calc$P[i+1]
+          logK_check_complete <- TRUE
+          break
+        } else if ((logK < 0) & (logK >= logKmin) & (logK <= logKmax)){
           minP <- init_calc$P[i]
           maxP <- init_calc$P[i+1]
           logK_check_complete <- TRUE
