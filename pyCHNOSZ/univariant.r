@@ -8,10 +8,10 @@
 
 uc_solveT <- function(logK, species, state, coeff,
                       pressures = 1, IS=0, minT = 0.1, maxT = 100, tol=0.00001){
-
+    
   user_minT <- minT
   user_maxT <- maxT
-
+    
   # create a data frame to hold results
   PlH <- rep(NA, length(pressures)) # placeholder
 
@@ -66,9 +66,10 @@ uc_solveT <- function(logK, species, state, coeff,
       if(is.na(guesslogK) | !is.finite(guesslogK)){
         break
       }
-
+        
       # check if initial guess is close enough to actual logK within tolerance
       if(abs(logK - guesslogK) < tol){
+
         this_P <- sprintf("%.3f", round(pressure, 3))
         df[df[, "P"] == this_P, "T"] <- sprintf("%.3f", round(guessT, 3))
         
@@ -83,7 +84,7 @@ uc_solveT <- function(logK, species, state, coeff,
         df[df[, "P"] == this_P, "Cp"] <- sprintf("%.1f", round(guess_calc$out$Cp, 1))
 
         result <- list(reaction = guess_calc$reaction, out = df)
-
+          
         converged <- TRUE
         break
       }

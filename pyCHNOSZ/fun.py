@@ -863,10 +863,10 @@ def diagram_interactive(data, title=None, borders=0,
     An interactive plot.
     """
     
-    basis_sp = list(data.rx2("basis").index)
+    basis_sp = list(ro.conversion.rpy2py(data.rx2("basis")).index)
 
-    xyvars = list(data.rx2("vars"))
-    xyvals = list(data.rx2("vals"))
+    xyvars = list(ro.conversion.rpy2py(data.rx2("vars")))
+    xyvals = list(ro.conversion.rpy2py(data.rx2("vals")))
 
     if 'loga.equil' not in data.names:
         calc_type = "a"
@@ -1197,7 +1197,7 @@ def _convert_to_RVector(value, force_Rvec=True):
         return ro.BoolVector(value)
     elif all(isinstance(x, (int, np.integer)) for x in value):
         return ro.IntVector(value)
-    elif all(isinstance(x, (int, np.integer, float, np.float)) for x in value):
+    elif all(isinstance(x, (int, np.integer, float)) for x in value):
         return ro.FloatVector(value)
     else:
         return ro.StrVector(value)
