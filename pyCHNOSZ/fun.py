@@ -2137,10 +2137,8 @@ def reset(db="OBIGT", messages=True):
             _ = add_OBIGT(WORM_DB, messages=False)
             if messages:
                 naq = WORM_DB[WORM_DB["state"] == "aq"].shape[0]
-                ntot = WORM_DB[WORM_DB["state"].isin(["gas", "cr", "liq", "aq"])].shape[0]
-                print("reset: the WORM thermodynamic database has been loaded.")
-                print("")
-                print("WORM: loading WORM database with {0} aqueous, {1} total species".format(str(naq), str(ntot)))
+                ntot = WORM_DB.shape[0]
+                print("The WORM thermodynamic database has been loaded: {0} aqueous, {1} total species".format(str(naq), str(ntot)))
         else:
             db = "OBIGT"
             if messages:
@@ -2562,6 +2560,18 @@ class thermo:
     See the original CHNOSZ documentation for in-depth descriptions of each
     attribute: https://chnosz.net/manual/thermo.html
     
+    Parameters
+    ----------
+    db : str, default "OBIGT"
+        Accepts "WORM" or "OBIGT". Which thermodynamic database should be used?
+        If "WORM", the database from
+        https://raw.githubusercontent.com/worm-portal/WORM-db/master/wrm_data.csv
+        will be loaded. Otherwise, the default database for CHNOSZ, called
+        OBIGT, will be loaded.
+    
+    messages : bool, default True
+        Print messages from CHNOSZ?
+    
     Attributes
     ----------
     OBIGT : pd.DataFrame
@@ -2609,10 +2619,12 @@ class thermo:
         
     """
     
-    def __init__(self, messages=True, **kwargs):
+    def __init__(self, db="OBIGT", messages=True, **kwargs):
+        
+        if db == "WORM":
+            reset("WORM", messages=messages)
         
         args = {}
-        
         for key, value in kwargs.items():
             if isinstance(value, list) or isinstance(value, str) or isinstance(value, NumberTypes):
                 value = _convert_to_RVector(value, force_Rvec=False)
