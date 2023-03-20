@@ -14,6 +14,11 @@ import decimal
 import chemparse
 import copy
 
+from urllib.request import urlopen
+from io import StringIO
+import requests
+import time
+
 import rpy2.rinterface_lib.callbacks
 import logging
 rpy2.rinterface_lib.callbacks.logger.setLevel(logging.ERROR)   # will display errors, but not warnings
@@ -30,6 +35,19 @@ grdev = importr('grDevices')
 
 NumberTypes = (int, float, complex)
 
+
+def _can_connect_to(url) -> bool:  # `bool` is a type hint for the return type of the function
+    try:
+        response = requests.get(url)
+    except requests.ConnectionError:
+        return False  # can NOT connect
+    else:
+        if response.status_code == 200:
+            return True  # can connect
+        else:
+            print("Unanticipated error code when attempting to reach WORM database:", response.status_code)
+            return False
+            
 
 @contextmanager
 def __r_inline_plot(width=600, height=520, dpi=150, plot_it=True):
@@ -863,10 +881,10 @@ def diagram_interactive(data, title=None, borders=0,
     An interactive plot.
     """
     
-    basis_sp = list(data.rx2("basis").index)
+    basis_sp = list(ro.conversion.rpy2py(data.rx2("basis")).index)
 
-    xyvars = list(data.rx2("vars"))
-    xyvals = list(data.rx2("vals"))
+    xyvars = list(ro.conversion.rpy2py(data.rx2("vars")))
+    xyvals = list(ro.conversion.rpy2py(data.rx2("vals")))
 
     if 'loga.equil' not in data.names:
         calc_type = "a"
@@ -1197,7 +1215,7 @@ def _convert_to_RVector(value, force_Rvec=True):
         return ro.BoolVector(value)
     elif all(isinstance(x, (int, np.integer)) for x in value):
         return ro.IntVector(value)
-    elif all(isinstance(x, (int, np.integer, float, np.float)) for x in value):
+    elif all(isinstance(x, (int, np.integer, float)) for x in value):
         return ro.FloatVector(value)
     else:
         return ro.StrVector(value)
@@ -2081,7 +2099,7 @@ def basis(species=None, state=None, logact=None, delete=False, messages=True):
     return ro.conversion.rpy2py(bout)
 
 
-def reset(messages=True):
+def reset(db="OBIGT", messages=True):
     
     """
     Python wrapper for the reset() function in CHNOSZ.
@@ -2091,18 +2109,51 @@ def reset(messages=True):
     
     Parameters
     ----------
+    db : str, default "OBIGT"
+        Accepts "WORM" or "OBIGT". Which thermodynamic database should be used?
+        If "WORM", the database from
+        https://raw.githubusercontent.com/worm-portal/WORM-db/master/wrm_data.csv
+        will be loaded. Otherwise, the default database for CHNOSZ, called
+        OBIGT, will be loaded.
+    
     messages : bool, default True
         Print messages from CHNOSZ?
     
     """
     
-    capture = R_output()
-    capture.capture_r_output()
-    
-    CHNOSZ.reset()
-        
-    if messages:
-        for line in capture.stderr: print(line)
+    if db == "WORM":
+        url = "https://raw.githubusercontent.com/worm-portal/WORM-db/master/wrm_data.csv"
+
+        # Load WORM database by detault
+        if _can_connect_to(url):
+            # Download from URL and decode as UTF-8 text.
+            with urlopen(url) as webpage:
+                content = webpage.read().decode()
+            WORM_DB = pd.read_csv(StringIO(content), sep=",")
+
+            thermo_trunc = thermo()["OBIGT"][thermo()["OBIGT"]["name"].isin(["water", "H+", "e-"])]
+            thermo(**{"OBIGT":thermo_trunc})
+
+            _ = add_OBIGT(WORM_DB, messages=False)
+            if messages:
+                naq = WORM_DB[WORM_DB["state"] == "aq"].shape[0]
+                ntot = WORM_DB[WORM_DB["state"].isin(["gas", "cr", "liq", "aq"])].shape[0]
+                print("reset: the WORM thermodynamic database has been loaded.")
+                print("")
+                print("WORM: loading WORM database with {0} aqueous, {1} total species".format(str(naq), str(ntot)))
+        else:
+            db = "OBIGT"
+            if messages:
+                print("Could not reach the WORM database repository. The OBIGT database has been loaded instead.")
+            
+    if db == "OBIGT":
+        capture = R_output()
+        capture.capture_r_output()
+
+        CHNOSZ.reset()
+
+        if messages:
+            for line in capture.stderr: print(line)
 
 
 def add_OBIGT(file, species=None, force=True, messages=True):
