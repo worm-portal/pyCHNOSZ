@@ -27,45 +27,12 @@ uc_solveT <- function(logK, species, state, coeff,
                    stringsAsFactors=FALSE
                  )
     
-  previous_T <- NA
   for (pressure in pressures){
 
-    converged <- FALSE
-      
-    if(!(is.na(previous_T))){
-
-      guess_calc <- suppressMessages(subcrt(species, state, coeff, T=previous_T, P=pressure, IS=IS, exceed.Ttr=T))
-      guesslogK <- guess_calc$out$logK
-
-      if(abs(logK - guesslogK) < tol){
-          
-        guessT <- previous_T
-          
-        this_P <- sprintf("%.3f", round(pressure, 3))
-        df[df[, "P"] == this_P, "T"] <- sprintf("%.3f", round(guessT, 3))
-        
-        if("rho" %in% names(guess_calc$out)){
-          df[df[, "P"] == this_P, "rho"] <- sprintf("%.3f", round(guess_calc$out$rho, 3))
-        }
-        df[df[, "P"] == this_P, "logK"] <- sprintf("%.3f", round(guesslogK, 3))
-        df[df[, "P"] == this_P, "G"] <- sprintf("%.0f", round(guess_calc$out$G, 0))
-        df[df[, "P"] == this_P, "H"] <- sprintf("%.0f", round(guess_calc$out$H, 0))
-        df[df[, "P"] == this_P, "S"] <- sprintf("%.1f", round(guess_calc$out$S, 1))
-        df[df[, "P"] == this_P, "V"] <- sprintf("%.1f", round(guess_calc$out$V, 1))
-        df[df[, "P"] == this_P, "Cp"] <- sprintf("%.1f", round(guess_calc$out$Cp, 1))
-
-        result <- list(reaction=guess_calc$reaction, out=df)
-        converged <- TRUE
-      }else{
-        previous_T <- NA
-      }
-    }else{
-      previous_T <- NA
-    }
-      
     minT <- user_minT
     maxT <- user_maxT
     completed_iter <- 0
+    converged <- FALSE
 
     while(!converged){
       if(completed_iter > 100){
@@ -150,16 +117,6 @@ uc_solveT <- function(logK, species, state, coeff,
           logK_check_complete <- TRUE
           break  
         } else if ((logK >= 0) & (logK >= logKmin) & (logK <= logKmax)){
-          minT <- init_calc$T[i]
-          maxT <- init_calc$T[i+1]
-          logK_check_complete <- TRUE
-          break
-        } else if ((logK < 0) & (logK >= logKmin) & (logK <= logKmax)){
-          minT <- init_calc$T[i]
-          maxT <- init_calc$T[i+1]
-          logK_check_complete <- TRUE
-          break
-        } else if ((logK > 0) & (logK >= logKmin) & (logK <= logKmax)){
           minT <- init_calc$T[i]
           maxT <- init_calc$T[i+1]
           logK_check_complete <- TRUE
@@ -284,22 +241,12 @@ uc_solveP <- function(logK, species, state, coeff,
             
           result <- list(reaction = guess_calc$reaction, out = df)
           converged <- TRUE
-        }else if ((logK >= 0) & (logK <= logKmin) & (logK >= logKmax)){
+        }else if ((logK >= 0) & (logK >= logKmin) & (logK <= logKmax)){
           minP <- init_calc$P[i]
           maxP <- init_calc$P[i+1]
           logK_check_complete <- TRUE
           break
-        } else if ((logK <= 0) & (logK <= logKmin) & (logK >= logKmax)){
-          minP <- init_calc$P[i]
-          maxP <- init_calc$P[i+1]
-          logK_check_complete <- TRUE
-          break
-        } else if ((logK > 0) & (logK >= logKmin) & (logK <= logKmax)){
-          minP <- init_calc$P[i]
-          maxP <- init_calc$P[i+1]
-          logK_check_complete <- TRUE
-          break
-        } else if ((logK < 0) & (logK >= logKmin) & (logK <= logKmax)){
+        } else if ((logK <= 0) & (logK >= logKmin) & (logK <= logKmax)){
           minP <- init_calc$P[i]
           maxP <- init_calc$P[i+1]
           logK_check_complete <- TRUE
