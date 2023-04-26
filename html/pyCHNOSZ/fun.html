@@ -42,6 +42,11 @@ import decimal
 import chemparse
 import copy
 
+from urllib.request import urlopen
+from io import StringIO
+import requests
+import time
+
 import rpy2.rinterface_lib.callbacks
 import logging
 rpy2.rinterface_lib.callbacks.logger.setLevel(logging.ERROR)   # will display errors, but not warnings
@@ -58,6 +63,19 @@ grdev = importr(&#39;grDevices&#39;)
 
 NumberTypes = (int, float, complex)
 
+
+def _can_connect_to(url) -&gt; bool:  # `bool` is a type hint for the return type of the function
+    try:
+        response = requests.get(url)
+    except requests.ConnectionError:
+        return False  # can NOT connect
+    else:
+        if response.status_code == 200:
+            return True  # can connect
+        else:
+            print(&#34;Unanticipated error code when attempting to reach WORM database:&#34;, response.status_code)
+            return False
+            
 
 @contextmanager
 def __r_inline_plot(width=600, height=520, dpi=150, plot_it=True):
@@ -891,10 +909,10 @@ def diagram_interactive(data, title=None, borders=0,
     An interactive plot.
     &#34;&#34;&#34;
     
-    basis_sp = list(data.rx2(&#34;basis&#34;).index)
+    basis_sp = list(ro.conversion.rpy2py(data.rx2(&#34;basis&#34;)).index)
 
-    xyvars = list(data.rx2(&#34;vars&#34;))
-    xyvals = list(data.rx2(&#34;vals&#34;))
+    xyvars = list(ro.conversion.rpy2py(data.rx2(&#34;vars&#34;)))
+    xyvals = list(ro.conversion.rpy2py(data.rx2(&#34;vals&#34;)))
 
     if &#39;loga.equil&#39; not in data.names:
         calc_type = &#34;a&#34;
@@ -1225,7 +1243,7 @@ def _convert_to_RVector(value, force_Rvec=True):
         return ro.BoolVector(value)
     elif all(isinstance(x, (int, np.integer)) for x in value):
         return ro.IntVector(value)
-    elif all(isinstance(x, (int, np.integer, float, np.float)) for x in value):
+    elif all(isinstance(x, (int, np.integer, float)) for x in value):
         return ro.FloatVector(value)
     else:
         return ro.StrVector(value)
@@ -2109,7 +2127,7 @@ def basis(species=None, state=None, logact=None, delete=False, messages=True):
     return ro.conversion.rpy2py(bout)
 
 
-def reset(messages=True):
+def reset(db=&#34;OBIGT&#34;, messages=True):
     
     &#34;&#34;&#34;
     Python wrapper for the reset() function in CHNOSZ.
@@ -2119,18 +2137,49 @@ def reset(messages=True):
     
     Parameters
     ----------
+    db : str, default &#34;OBIGT&#34;
+        Accepts &#34;WORM&#34; or &#34;OBIGT&#34;. Which thermodynamic database should be used?
+        If &#34;WORM&#34;, the database from
+        https://raw.githubusercontent.com/worm-portal/WORM-db/master/wrm_data.csv
+        will be loaded. Otherwise, the default database for CHNOSZ, called
+        OBIGT, will be loaded.
+    
     messages : bool, default True
         Print messages from CHNOSZ?
     
     &#34;&#34;&#34;
     
-    capture = R_output()
-    capture.capture_r_output()
-    
-    CHNOSZ.reset()
-        
-    if messages:
-        for line in capture.stderr: print(line)
+    if db == &#34;WORM&#34;:
+        url = &#34;https://raw.githubusercontent.com/worm-portal/WORM-db/master/wrm_data.csv&#34;
+
+        # Load WORM database by detault
+        if _can_connect_to(url):
+            # Download from URL and decode as UTF-8 text.
+            with urlopen(url) as webpage:
+                content = webpage.read().decode()
+            WORM_DB = pd.read_csv(StringIO(content), sep=&#34;,&#34;)
+
+            thermo_trunc = thermo()[&#34;OBIGT&#34;][thermo()[&#34;OBIGT&#34;][&#34;name&#34;].isin([&#34;water&#34;, &#34;H+&#34;, &#34;e-&#34;])]
+            thermo(**{&#34;OBIGT&#34;:thermo_trunc})
+
+            _ = add_OBIGT(WORM_DB, messages=False)
+            if messages:
+                naq = WORM_DB[WORM_DB[&#34;state&#34;] == &#34;aq&#34;].shape[0]
+                ntot = WORM_DB.shape[0]
+                print(&#34;The WORM thermodynamic database has been loaded: {0} aqueous, {1} total species&#34;.format(str(naq), str(ntot)))
+        else:
+            db = &#34;OBIGT&#34;
+            if messages:
+                print(&#34;Could not reach the WORM database repository. The OBIGT database has been loaded instead.&#34;)
+            
+    if db == &#34;OBIGT&#34;:
+        capture = R_output()
+        capture.capture_r_output()
+
+        CHNOSZ.reset()
+
+        if messages:
+            for line in capture.stderr: print(line)
 
 
 def add_OBIGT(file, species=None, force=True, messages=True):
@@ -2539,6 +2588,18 @@ class thermo:
     See the original CHNOSZ documentation for in-depth descriptions of each
     attribute: https://chnosz.net/manual/thermo.html
     
+    Parameters
+    ----------
+    db : str, default &#34;OBIGT&#34;
+        Accepts &#34;WORM&#34; or &#34;OBIGT&#34;. Which thermodynamic database should be used?
+        If &#34;WORM&#34;, the database from
+        https://raw.githubusercontent.com/worm-portal/WORM-db/master/wrm_data.csv
+        will be loaded. Otherwise, the default database for CHNOSZ, called
+        OBIGT, will be loaded.
+    
+    messages : bool, default True
+        Print messages from CHNOSZ?
+    
     Attributes
     ----------
     OBIGT : pd.DataFrame
@@ -2586,10 +2647,12 @@ class thermo:
         
     &#34;&#34;&#34;
     
-    def __init__(self, messages=True, **kwargs):
+    def __init__(self, db=&#34;OBIGT&#34;, messages=True, **kwargs):
+        
+        if db == &#34;WORM&#34;:
+            reset(&#34;WORM&#34;, messages=messages)
         
         args = {}
-        
         for key, value in kwargs.items():
             if isinstance(value, list) or isinstance(value, str) or isinstance(value, NumberTypes):
                 value = _convert_to_RVector(value, force_Rvec=False)
@@ -4474,10 +4537,10 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
     An interactive plot.
     &#34;&#34;&#34;
     
-    basis_sp = list(data.rx2(&#34;basis&#34;).index)
+    basis_sp = list(ro.conversion.rpy2py(data.rx2(&#34;basis&#34;)).index)
 
-    xyvars = list(data.rx2(&#34;vars&#34;))
-    xyvals = list(data.rx2(&#34;vals&#34;))
+    xyvars = list(ro.conversion.rpy2py(data.rx2(&#34;vars&#34;)))
+    xyvals = list(ro.conversion.rpy2py(data.rx2(&#34;vals&#34;)))
 
     if &#39;loga.equil&#39; not in data.names:
         calc_type = &#34;a&#34;
@@ -5399,7 +5462,7 @@ bottom arguments. The default is a ratio with H+, i.e.
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.reset"><code class="name flex">
-<span>def <span class="ident">reset</span></span>(<span>messages=True)</span>
+<span>def <span class="ident">reset</span></span>(<span>db='OBIGT', messages=True)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Python wrapper for the reset() function in CHNOSZ.
@@ -5408,6 +5471,12 @@ computational settings, thermodynamic database, and system settings
 (chemical species).</p>
 <h2 id="parameters">Parameters</h2>
 <dl>
+<dt><strong><code>db</code></strong> :&ensp;<code>str</code>, default <code>"OBIGT"</code></dt>
+<dd>Accepts "WORM" or "OBIGT". Which thermodynamic database should be used?
+If "WORM", the database from
+<a href="https://raw.githubusercontent.com/worm-portal/WORM-db/master/wrm_data.csv">https://raw.githubusercontent.com/worm-portal/WORM-db/master/wrm_data.csv</a>
+will be loaded. Otherwise, the default database for CHNOSZ, called
+OBIGT, will be loaded.</dd>
 <dt><strong><code>messages</code></strong> :&ensp;<code>bool</code>, default <code>True</code></dt>
 <dd>Print messages from CHNOSZ?</dd>
 </dl></div>
@@ -5415,7 +5484,7 @@ computational settings, thermodynamic database, and system settings
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def reset(messages=True):
+<pre><code class="python">def reset(db=&#34;OBIGT&#34;, messages=True):
     
     &#34;&#34;&#34;
     Python wrapper for the reset() function in CHNOSZ.
@@ -5425,18 +5494,49 @@ computational settings, thermodynamic database, and system settings
     
     Parameters
     ----------
+    db : str, default &#34;OBIGT&#34;
+        Accepts &#34;WORM&#34; or &#34;OBIGT&#34;. Which thermodynamic database should be used?
+        If &#34;WORM&#34;, the database from
+        https://raw.githubusercontent.com/worm-portal/WORM-db/master/wrm_data.csv
+        will be loaded. Otherwise, the default database for CHNOSZ, called
+        OBIGT, will be loaded.
+    
     messages : bool, default True
         Print messages from CHNOSZ?
     
     &#34;&#34;&#34;
     
-    capture = R_output()
-    capture.capture_r_output()
-    
-    CHNOSZ.reset()
-        
-    if messages:
-        for line in capture.stderr: print(line)</code></pre>
+    if db == &#34;WORM&#34;:
+        url = &#34;https://raw.githubusercontent.com/worm-portal/WORM-db/master/wrm_data.csv&#34;
+
+        # Load WORM database by detault
+        if _can_connect_to(url):
+            # Download from URL and decode as UTF-8 text.
+            with urlopen(url) as webpage:
+                content = webpage.read().decode()
+            WORM_DB = pd.read_csv(StringIO(content), sep=&#34;,&#34;)
+
+            thermo_trunc = thermo()[&#34;OBIGT&#34;][thermo()[&#34;OBIGT&#34;][&#34;name&#34;].isin([&#34;water&#34;, &#34;H+&#34;, &#34;e-&#34;])]
+            thermo(**{&#34;OBIGT&#34;:thermo_trunc})
+
+            _ = add_OBIGT(WORM_DB, messages=False)
+            if messages:
+                naq = WORM_DB[WORM_DB[&#34;state&#34;] == &#34;aq&#34;].shape[0]
+                ntot = WORM_DB.shape[0]
+                print(&#34;The WORM thermodynamic database has been loaded: {0} aqueous, {1} total species&#34;.format(str(naq), str(ntot)))
+        else:
+            db = &#34;OBIGT&#34;
+            if messages:
+                print(&#34;Could not reach the WORM database repository. The OBIGT database has been loaded instead.&#34;)
+            
+    if db == &#34;OBIGT&#34;:
+        capture = R_output()
+        capture.capture_r_output()
+
+        CHNOSZ.reset()
+
+        if messages:
+            for line in capture.stderr: print(line)</code></pre>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.retrieve"><code class="name flex">
@@ -6777,12 +6877,23 @@ generated.</dd>
 </dd>
 <dt id="pyCHNOSZ.fun.thermo"><code class="flex name class">
 <span>class <span class="ident">thermo</span></span>
-<span>(</span><span>messages=True, **kwargs)</span>
+<span>(</span><span>db='OBIGT', messages=True, **kwargs)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Python wrapper for the thermo() object in CHNOSZ.
 See the original CHNOSZ documentation for in-depth descriptions of each
 attribute: <a href="https://chnosz.net/manual/thermo.html">https://chnosz.net/manual/thermo.html</a></p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>db</code></strong> :&ensp;<code>str</code>, default <code>"OBIGT"</code></dt>
+<dd>Accepts "WORM" or "OBIGT". Which thermodynamic database should be used?
+If "WORM", the database from
+<a href="https://raw.githubusercontent.com/worm-portal/WORM-db/master/wrm_data.csv">https://raw.githubusercontent.com/worm-portal/WORM-db/master/wrm_data.csv</a>
+will be loaded. Otherwise, the default database for CHNOSZ, called
+OBIGT, will be loaded.</dd>
+<dt><strong><code>messages</code></strong> :&ensp;<code>bool</code>, default <code>True</code></dt>
+<dd>Print messages from CHNOSZ?</dd>
+</dl>
 <h2 id="attributes">Attributes</h2>
 <dl>
 <dt><strong><code>OBIGT</code></strong> :&ensp;<code>pd.DataFrame</code></dt>
@@ -6828,6 +6939,18 @@ define the species of interest.</dd>
     Python wrapper for the thermo() object in CHNOSZ.
     See the original CHNOSZ documentation for in-depth descriptions of each
     attribute: https://chnosz.net/manual/thermo.html
+    
+    Parameters
+    ----------
+    db : str, default &#34;OBIGT&#34;
+        Accepts &#34;WORM&#34; or &#34;OBIGT&#34;. Which thermodynamic database should be used?
+        If &#34;WORM&#34;, the database from
+        https://raw.githubusercontent.com/worm-portal/WORM-db/master/wrm_data.csv
+        will be loaded. Otherwise, the default database for CHNOSZ, called
+        OBIGT, will be loaded.
+    
+    messages : bool, default True
+        Print messages from CHNOSZ?
     
     Attributes
     ----------
@@ -6876,10 +6999,12 @@ define the species of interest.</dd>
         
     &#34;&#34;&#34;
     
-    def __init__(self, messages=True, **kwargs):
+    def __init__(self, db=&#34;OBIGT&#34;, messages=True, **kwargs):
+        
+        if db == &#34;WORM&#34;:
+            reset(&#34;WORM&#34;, messages=messages)
         
         args = {}
-        
         for key, value in kwargs.items():
             if isinstance(value, list) or isinstance(value, str) or isinstance(value, NumberTypes):
                 value = _convert_to_RVector(value, force_Rvec=False)

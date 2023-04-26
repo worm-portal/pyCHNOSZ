@@ -26,13 +26,46 @@ uc_solveT <- function(logK, species, state, coeff,
                    Cp = PlH,
                    stringsAsFactors=FALSE
                  )
-
+    
+  previous_T <- NA
   for (pressure in pressures){
 
+    converged <- FALSE
+      
+    if(!(is.na(previous_T))){
+
+      guess_calc <- suppressMessages(subcrt(species, state, coeff, T=previous_T, P=pressure, IS=IS, exceed.Ttr=T))
+      guesslogK <- guess_calc$out$logK
+
+      if(abs(logK - guesslogK) < tol){
+          
+        guessT <- previous_T
+          
+        this_P <- sprintf("%.3f", round(pressure, 3))
+        df[df[, "P"] == this_P, "T"] <- sprintf("%.3f", round(guessT, 3))
+        
+        if("rho" %in% names(guess_calc$out)){
+          df[df[, "P"] == this_P, "rho"] <- sprintf("%.3f", round(guess_calc$out$rho, 3))
+        }
+        df[df[, "P"] == this_P, "logK"] <- sprintf("%.3f", round(guesslogK, 3))
+        df[df[, "P"] == this_P, "G"] <- sprintf("%.0f", round(guess_calc$out$G, 0))
+        df[df[, "P"] == this_P, "H"] <- sprintf("%.0f", round(guess_calc$out$H, 0))
+        df[df[, "P"] == this_P, "S"] <- sprintf("%.1f", round(guess_calc$out$S, 1))
+        df[df[, "P"] == this_P, "V"] <- sprintf("%.1f", round(guess_calc$out$V, 1))
+        df[df[, "P"] == this_P, "Cp"] <- sprintf("%.1f", round(guess_calc$out$Cp, 1))
+
+        result <- list(reaction=guess_calc$reaction, out=df)
+        converged <- TRUE
+      }else{
+        previous_T <- NA
+      }
+    }else{
+      previous_T <- NA
+    }
+      
     minT <- user_minT
     maxT <- user_maxT
     completed_iter <- 0
-    converged <- FALSE
 
     while(!converged){
       if(completed_iter > 100){
@@ -40,7 +73,8 @@ uc_solveT <- function(logK, species, state, coeff,
         break
       }
 
-      # perform a subcrt calculation using a guess
+      # Perform a subcrt calculation using a guessed temperature.
+      # The point of this block is to find a logK that is not NA or inifinite.
       found_guesslogK <- FALSE
       iter_guesslogK <- 0
       while(!found_guesslogK){
@@ -49,11 +83,11 @@ uc_solveT <- function(logK, species, state, coeff,
         }else if(iter_guesslogK <= 20){
           guessT <- seq(minT, maxT, length.out=20)[iter_guesslogK]
         }else{
-          warning("Could not find a viable temperature guess in this range after 20 tries. Terminating calculation.")
+          message("Could not find a viable temperature guess in this range after 20 tries. Terminating calculation.")
           break
         }
             
-        guess_calc <- suppressMessages(subcrt(species, state, coeff, T = guessT, P = pressure, IS = IS, exceed.Ttr = T))
+        guess_calc <- suppressMessages(subcrt(species, state, coeff, T=guessT, P=pressure, IS=IS, exceed.Ttr=T))
         guesslogK <- guess_calc$out$logK
           
         if(!is.na(guesslogK) && is.finite(guesslogK)){
@@ -84,13 +118,13 @@ uc_solveT <- function(logK, species, state, coeff,
         df[df[, "P"] == this_P, "Cp"] <- sprintf("%.1f", round(guess_calc$out$Cp, 1))
 
         result <- list(reaction = guess_calc$reaction, out = df)
-          
+        previous_T <- guessT
         converged <- TRUE
         break
       }
 
       # perform an initial calculation across a range of temperatures bounded by current minT and maxT
-      init_calc <- suppressMessages(subcrt(species, state, coeff, T = seq(minT, maxT, length.out = 200), P = pressure, IS=IS, exceed.Ttr=T)$out)
+      init_calc <- suppressMessages(subcrt(species, state, coeff, T=seq(minT, maxT, length.out=200), P=pressure, IS=IS, exceed.Ttr=T)$out)
 
       # Check if logK falls between any of the temperature iterations in the initial calculation
       logK_check_complete <- FALSE
@@ -98,9 +132,9 @@ uc_solveT <- function(logK, species, state, coeff,
 
         logKmin <- init_calc$logK[i]
         logKmax <- init_calc$logK[i+1]
-        
-        
+          
         if ((!is.finite(logKmin)) | (!is.finite(logKmax))){
+            
           if(!("Warning" %in% colnames(df))){
             df$Warning <-PlH # create 'Warning' column
           }
@@ -110,12 +144,12 @@ uc_solveT <- function(logK, species, state, coeff,
             
           result <- list(reaction = guess_calc$reaction, out = df)
           converged <- TRUE
-        } else if ((logK <= 0) & (logK <= logKmin) & (logK >= logKmax)){
+        } else if ((logK <= 0) & (logK >= logKmin) & (logK <= logKmax)){
           minT <- init_calc$T[i]
           maxT <- init_calc$T[i+1]
           logK_check_complete <- TRUE
           break  
-        } else if ((logK >= 0) & (logK <= logKmin) & (logK >= logKmax)){
+        } else if ((logK >= 0) & (logK >= logKmin) & (logK <= logKmax)){
           minT <- init_calc$T[i]
           maxT <- init_calc$T[i+1]
           logK_check_complete <- TRUE
@@ -131,6 +165,7 @@ uc_solveT <- function(logK, species, state, coeff,
           logK_check_complete <- TRUE
           break
         } else if ((i == (length(init_calc$logK)-1)) & (!logK_check_complete)){
+            
           if(!("Warning" %in% colnames(df))){
             df$Warning <-PlH # create 'Warning' column
           }
@@ -138,13 +173,13 @@ uc_solveT <- function(logK, species, state, coeff,
           this_P <- sprintf("%.3f", round(pressure, 3))
           df[df[, "P"] == this_P, "Warning"] <- paste("Could not converge on T for this P within", user_minT, "and", user_maxT, "degC")
             
-          result <- list(reaction = guess_calc$reaction, out = df)
+          result <- list(reaction=guess_calc$reaction, out=df)
           converged <- TRUE
         }
 
 
       } # end logK for loop
-
+        
       completed_iter <- completed_iter + 1 # increase iteration counter
 
     } # end !converged while loop

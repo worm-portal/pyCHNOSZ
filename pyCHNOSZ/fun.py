@@ -2826,6 +2826,7 @@ def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
 
 
 def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
+                  xlim=None, ylim=None, line_type="markers+lines",
                   tol=None, title=None, res=10, width=500, height=400,
                   show=False, messages=False, plot_it=True):
 
@@ -2861,6 +2862,14 @@ def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
     IS : numeric or list of numeric, optional
         Ionic strength(s) at which to calculate adjusted molal properties,
         mol kg^-1.
+    
+    xlim, ylim : list of numeric, optional
+        Define the range of the x and y axes, respectively. For example,
+        `xlim=[0, 400]` will set the x axis range from 0 to 400°C.
+    
+    line_type : str, default "markers+lines"
+        What type of line should be plotted? Options are "markers+lines",
+        "markers", and "lines".
     
     tol : float
         Tolerance for finding a temperature or pressure that converges on the
@@ -2921,7 +2930,7 @@ def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
             fig.add_trace(go.Scatter(
                 x=out["out"]["T"],
                 y=out["out"]["P"],
-                mode="lines+markers",
+                mode=line_type,
                 name="logK="+str(this_logK),
                 text = ["logK="+str(this_logK) for i in range(0, len(out["out"]["T"]))],
                 hovertemplate = '%{text}<br>T, °C=%{x:.2f}<br>P, bar=%{y:.2f}<extra></extra>',
@@ -2946,6 +2955,11 @@ def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
                       height=height,
                       hoverlabel=dict(bgcolor="white"),
     )
+    
+    if isinstance(xlim, list):
+        fig.update_xaxes(range = xlim)
+    if isinstance(ylim, list):
+        fig.update_yaxes(range = ylim)
     
     config = {'displaylogo': False,
               'modeBarButtonsToRemove': ['resetScale2d', 'toggleSpikelines']}
