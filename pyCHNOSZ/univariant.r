@@ -111,12 +111,32 @@ uc_solveT <- function(logK, species, state, coeff,
             
           result <- list(reaction = guess_calc$reaction, out = df)
           converged <- TRUE
+        } else if ((logK < 0) & (logK >= logKmin) & (logK <= logKmax)){
+          minT <- init_calc$T[i]
+          maxT <- init_calc$T[i+1]
+          logK_check_complete <- TRUE
+          break
+        } else if ((logK > 0) & (logK >= logKmin) & (logK <= logKmax)){
+          minT <- init_calc$T[i]
+          maxT <- init_calc$T[i+1]
+          logK_check_complete <- TRUE
+          break
         } else if ((logK <= 0) & (logK >= logKmin) & (logK <= logKmax)){
           minT <- init_calc$T[i]
           maxT <- init_calc$T[i+1]
           logK_check_complete <- TRUE
           break  
         } else if ((logK >= 0) & (logK >= logKmin) & (logK <= logKmax)){
+          minT <- init_calc$T[i]
+          maxT <- init_calc$T[i+1]
+          logK_check_complete <- TRUE
+          break
+        } else if ((logK <= 0) & (logK <= logKmin) & (logK >= logKmax)){
+          minT <- init_calc$T[i]
+          maxT <- init_calc$T[i+1]
+          logK_check_complete <- TRUE
+          break  
+        } else if ((logK >= 0) & (logK <= logKmin) & (logK >= logKmax)){
           minT <- init_calc$T[i]
           maxT <- init_calc$T[i+1]
           logK_check_complete <- TRUE
@@ -241,12 +261,32 @@ uc_solveP <- function(logK, species, state, coeff,
             
           result <- list(reaction = guess_calc$reaction, out = df)
           converged <- TRUE
-        }else if ((logK >= 0) & (logK >= logKmin) & (logK <= logKmax)){
+        } else if ((logK < 0) & (logK >= logKmin) & (logK <= logKmax)){
+          minP <- init_calc$P[i]
+          maxP <- init_calc$P[i+1]
+          logK_check_complete <- TRUE
+          break
+        } else if ((logK > 0) & (logK >= logKmin) & (logK <= logKmax)){
           minP <- init_calc$P[i]
           maxP <- init_calc$P[i+1]
           logK_check_complete <- TRUE
           break
         } else if ((logK <= 0) & (logK >= logKmin) & (logK <= logKmax)){
+          minP <- init_calc$P[i]
+          maxP <- init_calc$P[i+1]
+          logK_check_complete <- TRUE
+          break  
+        } else if ((logK >= 0) & (logK >= logKmin) & (logK <= logKmax)){
+          minP <- init_calc$P[i]
+          maxP <- init_calc$P[i+1]
+          logK_check_complete <- TRUE
+          break
+        } else if ((logK <= 0) & (logK <= logKmin) & (logK >= logKmax)){
+          minP <- init_calc$P[i]
+          maxP <- init_calc$P[i+1]
+          logK_check_complete <- TRUE
+          break  
+        } else if ((logK >= 0) & (logK <= logKmin) & (logK >= logKmax)){
           minP <- init_calc$P[i]
           maxP <- init_calc$P[i+1]
           logK_check_complete <- TRUE
