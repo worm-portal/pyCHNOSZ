@@ -3020,7 +3020,7 @@ def ratlab(top="K+", bottom="H+", molality=False):
     if "+" in top_formula.keys():
         top_charge = top_formula["+"]
     elif "-" in top_formula.keys():
-        top_charge = top_formula["-"]
+        top_charge = -top_formula["-"]
     else:
         raise Exception("Cannot create an ion ratio involving one or more neutral species.")
     
@@ -3028,7 +3028,7 @@ def ratlab(top="K+", bottom="H+", molality=False):
     if "+" in bottom_formula.keys():
         bottom_charge = bottom_formula["+"]
     elif "-" in bottom_formula.keys():
-        top_charge = bottom_formula["-"]
+        bottom_charge = -bottom_formula["-"]
     else:
         raise Exception("Cannot create an ion ratio involving one or more neutral species.")
     
