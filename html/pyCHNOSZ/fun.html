@@ -145,14 +145,14 @@ def __flatten_list(_2d_list):
 
 
 def __save_figure(fig, save_as, save_format, save_scale, plot_width, plot_height, ppi):
-    
+
     if isinstance(save_format, str) and save_format not in [&#39;png&#39;, &#39;jpg&#39;, &#39;jpeg&#39;, &#39;webp&#39;, &#39;svg&#39;, &#39;pdf&#39;, &#39;eps&#39;, &#39;json&#39;, &#39;html&#39;]:
         raise Exception(&#34;{}&#34;.format(save_format)+&#34; is an unrecognized &#34;
                         &#34;save format. Supported formats include &#39;png&#39;, &#34;
                         &#34;&#39;jpg&#39;, &#39;jpeg&#39;, &#39;webp&#39;, &#39;svg&#39;, &#39;pdf&#39;, &#39;eps&#39;, &#34;
                         &#34;&#39;json&#39;, or &#39;html&#39;&#34;)
 
-    if isinstance(save_format, str):
+    if isinstance(save_format, str) and save_as != None:
         if not isinstance(save_as, str):
             save_as = &#34;newplot&#34;
         if save_format==&#34;html&#34;:
@@ -414,9 +414,12 @@ def retrieve(elements=None, ligands=None, state=None, T=None, P=&#34;Psat&#34;,
     return out
 
     
+    
 def animation(basis_args={}, species_args={}, affinity_args={},
               equilibrate_args=None, diagram_args={},
               anim_var=&#34;T&#34;, anim_range=[0, 350, 8],
+              save_as=&#34;newanimationframe&#34;, save_format=&#34;png&#34;, height=300,
+              width=400, save_scale=1,
               messages=False):
     
     &#34;&#34;&#34;
@@ -635,7 +638,15 @@ def animation(basis_args={}, species_args={}, affinity_args={},
         fig.update_layout(legend_title=None)
 
         config = {&#39;displaylogo&#39;: False,
-                  &#39;modeBarButtonsToRemove&#39;: [&#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;]}
+                  &#39;modeBarButtonsToRemove&#39;: [&#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;],
+                  &#39;toImageButtonOptions&#39;: {
+                                             &#39;format&#39;: save_format, # one of png, svg, jpeg, webp
+                                             &#39;filename&#39;: save_as,
+                                             &#39;height&#39;: height,
+                                             &#39;width&#39;: width,
+                                             &#39;scale&#39;: save_scale,
+                                          },
+                 }
 
         fig.show(config=config)
         return
@@ -833,12 +844,21 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     config = {&#39;displaylogo&#39;: False,
               &#39;modeBarButtonsToRemove&#39;: [&#39;zoom2d&#39;, &#39;pan2d&#39;, &#39;zoomIn2d&#39;, &#39;zoomOut2d&#39;,
                                          &#39;autoScale2d&#39;, &#39;toggleSpikelines&#39;,
-                                         &#39;hoverClosestCartesian&#39;, &#39;hoverCompareCartesian&#39;]}
+                                         &#39;hoverClosestCartesian&#39;, &#39;hoverCompareCartesian&#39;],
+              &#39;toImageButtonOptions&#39;: {
+                                       &#39;format&#39;: save_format, # one of png, svg, jpeg, webp
+                                       &#39;filename&#39;: save_as,
+                                       &#39;height&#39;: height,
+                                       &#39;width&#39;: width,
+                                       &#39;scale&#39;: save_scale,
+                                        },
+             }
+    
 
     fig.show(config=config)
 
     
-def diagram_interactive(data, title=None, borders=0,
+def diagram_interactive(data, title=None, borders=0, names=None,
                         annotation=None, annotation_coords=[0, 0],
                         balance=None, xlab=None, ylab=None, colormap=&#34;viridis&#34;,
                         width=600, height=520, alpha=False, messages=True,
@@ -859,6 +879,9 @@ def diagram_interactive(data, title=None, borders=0,
         If set to a value greater than 0, shows lines that indicate borders
         between regions in predominance diagrams. Value indicates thickness
         of the border, in pixels.
+    
+    names : str, optional
+        Names of species for activity lines or predominance fields.
     
     annotation : str, optional
         Annotation to add to the plot.
@@ -948,12 +971,15 @@ def diagram_interactive(data, title=None, borders=0,
         
         df = pd.DataFrame(flat_out_vals)
         sp = list(info([int(val) for val in list(data.rx2(&#34;values&#34;).names)], messages=False)[&#34;name&#34;])
+        
+    if isinstance(names, list) and len(names)==len(sp):
+        sp = names
     
     df.index = sp
     df = df.transpose()
 
     if alpha and len(xyvars) == 1:
-        df = df.applymap(lambda x: 10**x)
+        df = df.map(lambda x: 10**x)
         df = df[sp].div(df[sp].sum(axis=1), axis=0)
         
     xvar = xyvars[0]
@@ -1098,22 +1124,6 @@ def diagram_interactive(data, title=None, borders=0,
                 yref=&#34;paper&#34;,
                 align=&#39;left&#39;,
                 bgcolor=&#34;rgba(255, 255, 255, 0.5)&#34;)
-                
-        save_as, save_format = __save_figure(fig, save_as, save_format, save_scale,
-                                             plot_width=width, plot_height=height, ppi=1)
-                
-        config = {&#39;displaylogo&#39;: False,
-                  &#39;modeBarButtonsToRemove&#39;: [&#39;zoom2d&#39;, &#39;pan2d&#39;, &#39;zoomIn2d&#39;, &#39;zoomOut2d&#39;,
-                                             &#39;autoScale2d&#39;, &#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;,
-                                             &#39;hoverClosestCartesian&#39;, &#39;hoverCompareCartesian&#39;],
-                  &#39;toImageButtonOptions&#39;: {
-                                             &#39;format&#39;: save_format, # one of png, svg, jpeg, webp
-                                             &#39;filename&#39;: save_as,
-                                             &#39;height&#39;: height,
-                                             &#39;width&#39;: width,
-                                             &#39;scale&#39;: save_scale,
-                                          },
-                 }
         
         if borders &gt; 0:
             
@@ -1204,6 +1214,22 @@ def diagram_interactive(data, title=None, borders=0,
             fig.update_yaxes(range=[min(yvals), max(yvals)], autorange=False, mirror=True)
             fig.update_xaxes(range=[min(xvals), max(xvals)], autorange=False, mirror=True)
         
+        
+    save_as, save_format = __save_figure(fig, save_as, save_format, save_scale,
+                                         plot_width=width, plot_height=height, ppi=1)
+
+    config = {&#39;displaylogo&#39;: False,
+              &#39;modeBarButtonsToRemove&#39;: [&#39;zoom2d&#39;, &#39;pan2d&#39;, &#39;zoomIn2d&#39;, &#39;zoomOut2d&#39;,
+                                         &#39;autoScale2d&#39;, &#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;,
+                                         &#39;hoverClosestCartesian&#39;, &#39;hoverCompareCartesian&#39;],
+              &#39;toImageButtonOptions&#39;: {
+                                         &#39;format&#39;: save_format, # one of png, svg, jpeg, webp
+                                         &#39;filename&#39;: save_as,
+                                         &#39;height&#39;: height,
+                                         &#39;width&#39;: width,
+                                         &#39;scale&#39;: save_scale,
+                                      },
+             }
         
     if plot_it:
         fig.show(config=config)
@@ -1455,7 +1481,7 @@ def makeup(formula, multiplier=1, sum=False, count_zero=False, messages=True):
     out : dict
         Dictionary of elements and their counts in the formula(s).
     &#34;&#34;&#34;
-    
+
     formula_R = _convert_to_RVector(formula, force_Rvec=False)
     
     args = {&#39;formula&#39;:formula_R, &#34;multiplier&#34;:multiplier,
@@ -1465,7 +1491,9 @@ def makeup(formula, multiplier=1, sum=False, count_zero=False, messages=True):
     capture.capture_r_output()
         
     out = CHNOSZ.makeup(**args)
-        
+
+    return out
+    
     if messages:
         for line in capture.stderr: print(line)
     
@@ -1844,7 +1872,11 @@ def diagram(eout, ptype=&#39;auto&#39;, alpha=False, normalize=False,
     
     if interactive:
             
-        df, fig = diagram_interactive(data=eout, title=main, borders=borders,
+        df, fig = diagram_interactive(
+                                 data=eout,
+                                 title=main,
+                                 borders=borders,
+                                 names=names,
                                  annotation=annotation,
                                  annotation_coords=annotation_coords,
                                  balance=balance,
@@ -2649,8 +2681,9 @@ class thermo:
     
     def __init__(self, db=&#34;OBIGT&#34;, messages=True, **kwargs):
         
-        if db == &#34;WORM&#34;:
-            reset(&#34;WORM&#34;, messages=messages)
+        if isinstance(db, str):
+            if db == &#34;WORM&#34;:
+                reset(&#34;WORM&#34;, messages=messages)
         
         args = {}
         for key, value in kwargs.items():
@@ -2854,7 +2887,9 @@ def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
 
 
 def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
+                  xlim=None, ylim=None, line_type=&#34;markers+lines&#34;,
                   tol=None, title=None, res=10, width=500, height=400,
+                  save_as=None, save_format=None, save_scale=1,
                   show=False, messages=False, plot_it=True):
 
     &#34;&#34;&#34;
@@ -2890,6 +2925,14 @@ def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
         Ionic strength(s) at which to calculate adjusted molal properties,
         mol kg^-1.
     
+    xlim, ylim : list of numeric, optional
+        Define the range of the x and y axes, respectively. For example,
+        `xlim=[0, 400]` will set the x axis range from 0 to 400°C.
+    
+    line_type : str, default &#34;markers+lines&#34;
+        What type of line should be plotted? Options are &#34;markers+lines&#34;,
+        &#34;markers&#34;, and &#34;lines&#34;.
+    
     tol : float
         Tolerance for finding a temperature or pressure that converges on the
         given logK. Will attempt to find a solution that satisfies logK plus or
@@ -2899,6 +2942,24 @@ def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
     
     width, height : numeric, default 500 by 400
         Width and height of the plot.
+
+    save_as : str, optional
+        For interactive plots only (`interactive`=True). Provide a filename to
+        save this figure. Filetype of saved figure is determined by
+        `save_format`.
+        Note: interactive plots can be saved by clicking the &#39;Download plot&#39;
+        button in the plot&#39;s toolbar.
+
+    save_format : str, default &#34;png&#34;
+        For interactive plots only (`interactive`=True). Desired format of saved
+        or downloaded figure. Can be &#39;png&#39;, &#39;jpg&#39;, &#39;jpeg&#39;, &#39;webp&#39;, &#39;svg&#39;, &#39;pdf&#39;,
+        &#39;eps&#39;, &#39;json&#39;, or &#39;html&#39;. If &#39;html&#39;, an interactive plot will be saved.
+        Only &#39;png&#39;, &#39;svg&#39;, &#39;jpeg&#39;, and &#39;webp&#39; can be downloaded with the
+        &#39;download as&#39; button in the toolbar of an interactive plot.
+
+    save_scale : numeric, default 1
+        For interactive plots only (`interactive`=True). Multiply
+        title/legend/axis/canvas sizes by this factor when saving the figure.
 
     messages : bool, default True
         Display messages from CHNOSZ?
@@ -2949,7 +3010,7 @@ def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
             fig.add_trace(go.Scatter(
                 x=out[&#34;out&#34;][&#34;T&#34;],
                 y=out[&#34;out&#34;][&#34;P&#34;],
-                mode=&#34;lines+markers&#34;,
+                mode=line_type,
                 name=&#34;logK=&#34;+str(this_logK),
                 text = [&#34;logK=&#34;+str(this_logK) for i in range(0, len(out[&#34;out&#34;][&#34;T&#34;]))],
                 hovertemplate = &#39;%{text}&lt;br&gt;T, °C=%{x:.2f}&lt;br&gt;P, bar=%{y:.2f}&lt;extra&gt;&lt;/extra&gt;&#39;,
@@ -2961,8 +3022,9 @@ def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
     if title == None:
         react_grid = output[0][&#34;reaction&#34;]
         react_grid[&#34;name&#34;] = [name  if name != &#34;water&#34; else &#34;H2O&#34; for name in react_grid[&#34;name&#34;]] # replace any &#34;water&#34; with &#34;H2O&#34; in the written reaction
-        reactants = &#34; + &#34;.join([(str(-int(react_grid[&#34;coeff&#34;][i]) if isinstance(react_grid[&#34;coeff&#34;][i], (int, np.integer)) else -react_grid[&#34;coeff&#34;][i])+&#34; &#34; if -react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &lt; 0])
-        products = &#34; + &#34;.join([(str(int(react_grid[&#34;coeff&#34;][i]) if isinstance(react_grid[&#34;coeff&#34;][i], (int, np.integer)) else react_grid[&#34;coeff&#34;][i])+&#34; &#34; if react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &gt; 0])
+        
+        reactants = &#34; + &#34;.join([(str(-int(react_grid[&#34;coeff&#34;].iloc[i]) if isinstance(react_grid[&#34;coeff&#34;].iloc[i], (int, np.integer)) else -react_grid[&#34;coeff&#34;].iloc[i])+&#34; &#34; if -react_grid[&#34;coeff&#34;].iloc[i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;].iloc[i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;].iloc[i] &lt; 0])
+        products = &#34; + &#34;.join([(str(int(react_grid[&#34;coeff&#34;].iloc[i]) if isinstance(react_grid[&#34;coeff&#34;].iloc[i], (int, np.integer)) else react_grid[&#34;coeff&#34;].iloc[i])+&#34; &#34; if react_grid[&#34;coeff&#34;].iloc[i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;].iloc[i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;].iloc[i] &gt; 0])
         
         title = reactants + &#34; = &#34; + products
     
@@ -2975,8 +3037,24 @@ def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
                       hoverlabel=dict(bgcolor=&#34;white&#34;),
     )
     
+    if isinstance(xlim, list):
+        fig.update_xaxes(range = xlim)
+    if isinstance(ylim, list):
+        fig.update_yaxes(range = ylim)
+    
+    save_as, save_format = __save_figure(fig, save_as, save_format, save_scale,
+                                         plot_width=width, plot_height=height, ppi=1)
+    
     config = {&#39;displaylogo&#39;: False,
-              &#39;modeBarButtonsToRemove&#39;: [&#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;]}
+              &#39;modeBarButtonsToRemove&#39;: [&#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;],
+              &#39;toImageButtonOptions&#39;: {
+                                         &#39;format&#39;: save_format, # one of png, svg, jpeg, webp
+                                         &#39;filename&#39;: save_as,
+                                         &#39;height&#39;: height,
+                                         &#39;width&#39;: width,
+                                         &#39;scale&#39;: save_scale,
+                                      },
+             }
     
     if plot_it:
         fig.show(config=config)
@@ -3034,7 +3112,7 @@ def ratlab(top=&#34;K+&#34;, bottom=&#34;H+&#34;, molality=False):
     if &#34;+&#34; in top_formula.keys():
         top_charge = top_formula[&#34;+&#34;]
     elif &#34;-&#34; in top_formula.keys():
-        top_charge = top_formula[&#34;-&#34;]
+        top_charge = -top_formula[&#34;-&#34;]
     else:
         raise Exception(&#34;Cannot create an ion ratio involving one or more neutral species.&#34;)
     
@@ -3042,7 +3120,7 @@ def ratlab(top=&#34;K+&#34;, bottom=&#34;H+&#34;, molality=False):
     if &#34;+&#34; in bottom_formula.keys():
         bottom_charge = bottom_formula[&#34;+&#34;]
     elif &#34;-&#34; in bottom_formula.keys():
-        top_charge = bottom_formula[&#34;-&#34;]
+        bottom_charge = -bottom_formula[&#34;-&#34;]
     else:
         raise Exception(&#34;Cannot create an ion ratio involving one or more neutral species.&#34;)
     
@@ -3403,7 +3481,7 @@ pH, T, P, Eh, &hellip;</dd>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.animation"><code class="name flex">
-<span>def <span class="ident">animation</span></span>(<span>basis_args={}, species_args={}, affinity_args={}, equilibrate_args=None, diagram_args={}, anim_var='T', anim_range=[0, 350, 8], messages=False)</span>
+<span>def <span class="ident">animation</span></span>(<span>basis_args={}, species_args={}, affinity_args={}, equilibrate_args=None, diagram_args={}, anim_var='T', anim_range=[0, 350, 8], save_as='newanimationframe', save_format='png', height=300, width=400, save_scale=1, messages=False)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Produce an animated interactive affinity, activity, or predominance diagram.</p>
@@ -3448,6 +3526,8 @@ number of animation frames.</dd>
 <pre><code class="python">def animation(basis_args={}, species_args={}, affinity_args={},
               equilibrate_args=None, diagram_args={},
               anim_var=&#34;T&#34;, anim_range=[0, 350, 8],
+              save_as=&#34;newanimationframe&#34;, save_format=&#34;png&#34;, height=300,
+              width=400, save_scale=1,
               messages=False):
     
     &#34;&#34;&#34;
@@ -3666,7 +3746,15 @@ number of animation frames.</dd>
         fig.update_layout(legend_title=None)
 
         config = {&#39;displaylogo&#39;: False,
-                  &#39;modeBarButtonsToRemove&#39;: [&#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;]}
+                  &#39;modeBarButtonsToRemove&#39;: [&#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;],
+                  &#39;toImageButtonOptions&#39;: {
+                                             &#39;format&#39;: save_format, # one of png, svg, jpeg, webp
+                                             &#39;filename&#39;: save_as,
+                                             &#39;height&#39;: height,
+                                             &#39;width&#39;: width,
+                                             &#39;scale&#39;: save_scale,
+                                          },
+                 }
 
         fig.show(config=config)
         return
@@ -3864,7 +3952,16 @@ number of animation frames.</dd>
     config = {&#39;displaylogo&#39;: False,
               &#39;modeBarButtonsToRemove&#39;: [&#39;zoom2d&#39;, &#39;pan2d&#39;, &#39;zoomIn2d&#39;, &#39;zoomOut2d&#39;,
                                          &#39;autoScale2d&#39;, &#39;toggleSpikelines&#39;,
-                                         &#39;hoverClosestCartesian&#39;, &#39;hoverCompareCartesian&#39;]}
+                                         &#39;hoverClosestCartesian&#39;, &#39;hoverCompareCartesian&#39;],
+              &#39;toImageButtonOptions&#39;: {
+                                       &#39;format&#39;: save_format, # one of png, svg, jpeg, webp
+                                       &#39;filename&#39;: save_as,
+                                       &#39;height&#39;: height,
+                                       &#39;width&#39;: width,
+                                       &#39;scale&#39;: save_scale,
+                                        },
+             }
+    
 
     fig.show(config=config)</code></pre>
 </details>
@@ -4329,7 +4426,11 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
     
     if interactive:
             
-        df, fig = diagram_interactive(data=eout, title=main, borders=borders,
+        df, fig = diagram_interactive(
+                                 data=eout,
+                                 title=main,
+                                 borders=borders,
+                                 names=names,
                                  annotation=annotation,
                                  annotation_coords=annotation_coords,
                                  balance=balance,
@@ -4412,7 +4513,7 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.diagram_interactive"><code class="name flex">
-<span>def <span class="ident">diagram_interactive</span></span>(<span>data, title=None, borders=0, annotation=None, annotation_coords=[0, 0], balance=None, xlab=None, ylab=None, colormap='viridis', width=600, height=520, alpha=False, messages=True, plot_it=True, save_as=None, save_format=None, save_scale=1)</span>
+<span>def <span class="ident">diagram_interactive</span></span>(<span>data, title=None, borders=0, names=None, annotation=None, annotation_coords=[0, 0], balance=None, xlab=None, ylab=None, colormap='viridis', width=600, height=520, alpha=False, messages=True, plot_it=True, save_as=None, save_format=None, save_scale=1)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Produce an interactive diagram.</p>
@@ -4426,6 +4527,8 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
 <dd>If set to a value greater than 0, shows lines that indicate borders
 between regions in predominance diagrams. Value indicates thickness
 of the border, in pixels.</dd>
+<dt><strong><code>names</code></strong> :&ensp;<code>str</code>, optional</dt>
+<dd>Names of species for activity lines or predominance fields.</dd>
 <dt><strong><code>annotation</code></strong> :&ensp;<code>str</code>, optional</dt>
 <dd>Annotation to add to the plot.</dd>
 <dt><strong><code>annotation_coords</code></strong> :&ensp;<code>list</code> of <code>numeric</code>, default <code>[0, 0]</code>, optional</dt>
@@ -4466,7 +4569,7 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def diagram_interactive(data, title=None, borders=0,
+<pre><code class="python">def diagram_interactive(data, title=None, borders=0, names=None,
                         annotation=None, annotation_coords=[0, 0],
                         balance=None, xlab=None, ylab=None, colormap=&#34;viridis&#34;,
                         width=600, height=520, alpha=False, messages=True,
@@ -4487,6 +4590,9 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
         If set to a value greater than 0, shows lines that indicate borders
         between regions in predominance diagrams. Value indicates thickness
         of the border, in pixels.
+    
+    names : str, optional
+        Names of species for activity lines or predominance fields.
     
     annotation : str, optional
         Annotation to add to the plot.
@@ -4576,12 +4682,15 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
         
         df = pd.DataFrame(flat_out_vals)
         sp = list(info([int(val) for val in list(data.rx2(&#34;values&#34;).names)], messages=False)[&#34;name&#34;])
+        
+    if isinstance(names, list) and len(names)==len(sp):
+        sp = names
     
     df.index = sp
     df = df.transpose()
 
     if alpha and len(xyvars) == 1:
-        df = df.applymap(lambda x: 10**x)
+        df = df.map(lambda x: 10**x)
         df = df[sp].div(df[sp].sum(axis=1), axis=0)
         
     xvar = xyvars[0]
@@ -4726,22 +4835,6 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
                 yref=&#34;paper&#34;,
                 align=&#39;left&#39;,
                 bgcolor=&#34;rgba(255, 255, 255, 0.5)&#34;)
-                
-        save_as, save_format = __save_figure(fig, save_as, save_format, save_scale,
-                                             plot_width=width, plot_height=height, ppi=1)
-                
-        config = {&#39;displaylogo&#39;: False,
-                  &#39;modeBarButtonsToRemove&#39;: [&#39;zoom2d&#39;, &#39;pan2d&#39;, &#39;zoomIn2d&#39;, &#39;zoomOut2d&#39;,
-                                             &#39;autoScale2d&#39;, &#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;,
-                                             &#39;hoverClosestCartesian&#39;, &#39;hoverCompareCartesian&#39;],
-                  &#39;toImageButtonOptions&#39;: {
-                                             &#39;format&#39;: save_format, # one of png, svg, jpeg, webp
-                                             &#39;filename&#39;: save_as,
-                                             &#39;height&#39;: height,
-                                             &#39;width&#39;: width,
-                                             &#39;scale&#39;: save_scale,
-                                          },
-                 }
         
         if borders &gt; 0:
             
@@ -4832,6 +4925,22 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
             fig.update_yaxes(range=[min(yvals), max(yvals)], autorange=False, mirror=True)
             fig.update_xaxes(range=[min(xvals), max(xvals)], autorange=False, mirror=True)
         
+        
+    save_as, save_format = __save_figure(fig, save_as, save_format, save_scale,
+                                         plot_width=width, plot_height=height, ppi=1)
+
+    config = {&#39;displaylogo&#39;: False,
+              &#39;modeBarButtonsToRemove&#39;: [&#39;zoom2d&#39;, &#39;pan2d&#39;, &#39;zoomIn2d&#39;, &#39;zoomOut2d&#39;,
+                                         &#39;autoScale2d&#39;, &#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;,
+                                         &#39;hoverClosestCartesian&#39;, &#39;hoverCompareCartesian&#39;],
+              &#39;toImageButtonOptions&#39;: {
+                                         &#39;format&#39;: save_format, # one of png, svg, jpeg, webp
+                                         &#39;filename&#39;: save_as,
+                                         &#39;height&#39;: height,
+                                         &#39;width&#39;: width,
+                                         &#39;scale&#39;: save_scale,
+                                      },
+             }
         
     if plot_it:
         fig.show(config=config)
@@ -5190,7 +5299,7 @@ Ignored if <code>formula</code> is not a list.</dd>
     out : dict
         Dictionary of elements and their counts in the formula(s).
     &#34;&#34;&#34;
-    
+
     formula_R = _convert_to_RVector(formula, force_Rvec=False)
     
     args = {&#39;formula&#39;:formula_R, &#34;multiplier&#34;:multiplier,
@@ -5200,7 +5309,9 @@ Ignored if <code>formula</code> is not a list.</dd>
     capture.capture_r_output()
         
     out = CHNOSZ.makeup(**args)
-        
+
+    return out
+    
     if messages:
         for line in capture.stderr: print(line)
     
@@ -5426,7 +5537,7 @@ bottom arguments. The default is a ratio with H+, i.e.
     if &#34;+&#34; in top_formula.keys():
         top_charge = top_formula[&#34;+&#34;]
     elif &#34;-&#34; in top_formula.keys():
-        top_charge = top_formula[&#34;-&#34;]
+        top_charge = -top_formula[&#34;-&#34;]
     else:
         raise Exception(&#34;Cannot create an ion ratio involving one or more neutral species.&#34;)
     
@@ -5434,7 +5545,7 @@ bottom arguments. The default is a ratio with H+, i.e.
     if &#34;+&#34; in bottom_formula.keys():
         bottom_charge = bottom_formula[&#34;+&#34;]
     elif &#34;-&#34; in bottom_formula.keys():
-        top_charge = bottom_formula[&#34;-&#34;]
+        bottom_charge = -bottom_formula[&#34;-&#34;]
     else:
         raise Exception(&#34;Cannot create an ion ratio involving one or more neutral species.&#34;)
     
@@ -6415,7 +6526,7 @@ number of decimal places in logK, with a maximum default tolerance of
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.univariant_TP"><code class="name flex">
-<span>def <span class="ident">univariant_TP</span></span>(<span>logK, species, coeff, state, Trange, Prange, IS=0, tol=None, title=None, res=10, width=500, height=400, show=False, messages=False, plot_it=True)</span>
+<span>def <span class="ident">univariant_TP</span></span>(<span>logK, species, coeff, state, Trange, Prange, IS=0, xlim=None, ylim=None, line_type='markers+lines', tol=None, title=None, res=10, width=500, height=400, save_as=None, save_format=None, save_scale=1, show=False, messages=False, plot_it=True)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Solve for temperatures or pressures of equilibration for a given logK
@@ -6442,6 +6553,12 @@ pressure axis range in the resulting plot.</dd>
 <dt><strong><code>IS</code></strong> :&ensp;<code>numeric</code> or <code>list</code> of <code>numeric</code>, optional</dt>
 <dd>Ionic strength(s) at which to calculate adjusted molal properties,
 mol kg^-1.</dd>
+<dt><strong><code>xlim</code></strong>, <strong><code>ylim</code></strong> :&ensp;<code>list</code> of <code>numeric</code>, optional</dt>
+<dd>Define the range of the x and y axes, respectively. For example,
+<code>xlim=[0, 400]</code> will set the x axis range from 0 to 400°C.</dd>
+<dt><strong><code>line_type</code></strong> :&ensp;<code>str</code>, default <code>"markers+lines"</code></dt>
+<dd>What type of line should be plotted? Options are "markers+lines",
+"markers", and "lines".</dd>
 <dt><strong><code>tol</code></strong> :&ensp;<code>float</code></dt>
 <dd>Tolerance for finding a temperature or pressure that converges on the
 given logK. Will attempt to find a solution that satisfies logK plus or
@@ -6450,6 +6567,21 @@ number of decimal places in logK, with a maximum default tolerance of
 1e-5.</dd>
 <dt><strong><code>width</code></strong>, <strong><code>height</code></strong> :&ensp;<code>numeric</code>, default <code>500 by 400</code></dt>
 <dd>Width and height of the plot.</dd>
+<dt><strong><code>save_as</code></strong> :&ensp;<code>str</code>, optional</dt>
+<dd>For interactive plots only (<code>interactive</code>=True). Provide a filename to
+save this figure. Filetype of saved figure is determined by
+<code>save_format</code>.
+Note: interactive plots can be saved by clicking the 'Download plot'
+button in the plot's toolbar.</dd>
+<dt><strong><code>save_format</code></strong> :&ensp;<code>str</code>, default <code>"png"</code></dt>
+<dd>For interactive plots only (<code>interactive</code>=True). Desired format of saved
+or downloaded figure. Can be 'png', 'jpg', 'jpeg', 'webp', 'svg', 'pdf',
+'eps', 'json', or 'html'. If 'html', an interactive plot will be saved.
+Only 'png', 'svg', 'jpeg', and 'webp' can be downloaded with the
+'download as' button in the toolbar of an interactive plot.</dd>
+<dt><strong><code>save_scale</code></strong> :&ensp;<code>numeric</code>, default <code>1</code></dt>
+<dd>For interactive plots only (<code>interactive</code>=True). Multiply
+title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
 <dt><strong><code>messages</code></strong> :&ensp;<code>bool</code>, default <code>True</code></dt>
 <dd>Display messages from CHNOSZ?</dd>
 <dt><strong><code>show</code></strong> :&ensp;<code>bool</code>, default <code>True</code></dt>
@@ -6467,7 +6599,9 @@ number of decimal places in logK, with a maximum default tolerance of
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
+                  xlim=None, ylim=None, line_type=&#34;markers+lines&#34;,
                   tol=None, title=None, res=10, width=500, height=400,
+                  save_as=None, save_format=None, save_scale=1,
                   show=False, messages=False, plot_it=True):
 
     &#34;&#34;&#34;
@@ -6503,6 +6637,14 @@ number of decimal places in logK, with a maximum default tolerance of
         Ionic strength(s) at which to calculate adjusted molal properties,
         mol kg^-1.
     
+    xlim, ylim : list of numeric, optional
+        Define the range of the x and y axes, respectively. For example,
+        `xlim=[0, 400]` will set the x axis range from 0 to 400°C.
+    
+    line_type : str, default &#34;markers+lines&#34;
+        What type of line should be plotted? Options are &#34;markers+lines&#34;,
+        &#34;markers&#34;, and &#34;lines&#34;.
+    
     tol : float
         Tolerance for finding a temperature or pressure that converges on the
         given logK. Will attempt to find a solution that satisfies logK plus or
@@ -6512,6 +6654,24 @@ number of decimal places in logK, with a maximum default tolerance of
     
     width, height : numeric, default 500 by 400
         Width and height of the plot.
+
+    save_as : str, optional
+        For interactive plots only (`interactive`=True). Provide a filename to
+        save this figure. Filetype of saved figure is determined by
+        `save_format`.
+        Note: interactive plots can be saved by clicking the &#39;Download plot&#39;
+        button in the plot&#39;s toolbar.
+
+    save_format : str, default &#34;png&#34;
+        For interactive plots only (`interactive`=True). Desired format of saved
+        or downloaded figure. Can be &#39;png&#39;, &#39;jpg&#39;, &#39;jpeg&#39;, &#39;webp&#39;, &#39;svg&#39;, &#39;pdf&#39;,
+        &#39;eps&#39;, &#39;json&#39;, or &#39;html&#39;. If &#39;html&#39;, an interactive plot will be saved.
+        Only &#39;png&#39;, &#39;svg&#39;, &#39;jpeg&#39;, and &#39;webp&#39; can be downloaded with the
+        &#39;download as&#39; button in the toolbar of an interactive plot.
+
+    save_scale : numeric, default 1
+        For interactive plots only (`interactive`=True). Multiply
+        title/legend/axis/canvas sizes by this factor when saving the figure.
 
     messages : bool, default True
         Display messages from CHNOSZ?
@@ -6562,7 +6722,7 @@ number of decimal places in logK, with a maximum default tolerance of
             fig.add_trace(go.Scatter(
                 x=out[&#34;out&#34;][&#34;T&#34;],
                 y=out[&#34;out&#34;][&#34;P&#34;],
-                mode=&#34;lines+markers&#34;,
+                mode=line_type,
                 name=&#34;logK=&#34;+str(this_logK),
                 text = [&#34;logK=&#34;+str(this_logK) for i in range(0, len(out[&#34;out&#34;][&#34;T&#34;]))],
                 hovertemplate = &#39;%{text}&lt;br&gt;T, °C=%{x:.2f}&lt;br&gt;P, bar=%{y:.2f}&lt;extra&gt;&lt;/extra&gt;&#39;,
@@ -6574,8 +6734,9 @@ number of decimal places in logK, with a maximum default tolerance of
     if title == None:
         react_grid = output[0][&#34;reaction&#34;]
         react_grid[&#34;name&#34;] = [name  if name != &#34;water&#34; else &#34;H2O&#34; for name in react_grid[&#34;name&#34;]] # replace any &#34;water&#34; with &#34;H2O&#34; in the written reaction
-        reactants = &#34; + &#34;.join([(str(-int(react_grid[&#34;coeff&#34;][i]) if isinstance(react_grid[&#34;coeff&#34;][i], (int, np.integer)) else -react_grid[&#34;coeff&#34;][i])+&#34; &#34; if -react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &lt; 0])
-        products = &#34; + &#34;.join([(str(int(react_grid[&#34;coeff&#34;][i]) if isinstance(react_grid[&#34;coeff&#34;][i], (int, np.integer)) else react_grid[&#34;coeff&#34;][i])+&#34; &#34; if react_grid[&#34;coeff&#34;][i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;][i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;][i] &gt; 0])
+        
+        reactants = &#34; + &#34;.join([(str(-int(react_grid[&#34;coeff&#34;].iloc[i]) if isinstance(react_grid[&#34;coeff&#34;].iloc[i], (int, np.integer)) else -react_grid[&#34;coeff&#34;].iloc[i])+&#34; &#34; if -react_grid[&#34;coeff&#34;].iloc[i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;].iloc[i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;].iloc[i] &lt; 0])
+        products = &#34; + &#34;.join([(str(int(react_grid[&#34;coeff&#34;].iloc[i]) if isinstance(react_grid[&#34;coeff&#34;].iloc[i], (int, np.integer)) else react_grid[&#34;coeff&#34;].iloc[i])+&#34; &#34; if react_grid[&#34;coeff&#34;].iloc[i] != 1 else &#34;&#34;) + html_chemname_format(react_grid[&#34;name&#34;].iloc[i]) for i in range(0, len(react_grid[&#34;name&#34;])) if react_grid[&#34;coeff&#34;].iloc[i] &gt; 0])
         
         title = reactants + &#34; = &#34; + products
     
@@ -6588,8 +6749,24 @@ number of decimal places in logK, with a maximum default tolerance of
                       hoverlabel=dict(bgcolor=&#34;white&#34;),
     )
     
+    if isinstance(xlim, list):
+        fig.update_xaxes(range = xlim)
+    if isinstance(ylim, list):
+        fig.update_yaxes(range = ylim)
+    
+    save_as, save_format = __save_figure(fig, save_as, save_format, save_scale,
+                                         plot_width=width, plot_height=height, ppi=1)
+    
     config = {&#39;displaylogo&#39;: False,
-              &#39;modeBarButtonsToRemove&#39;: [&#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;]}
+              &#39;modeBarButtonsToRemove&#39;: [&#39;resetScale2d&#39;, &#39;toggleSpikelines&#39;],
+              &#39;toImageButtonOptions&#39;: {
+                                         &#39;format&#39;: save_format, # one of png, svg, jpeg, webp
+                                         &#39;filename&#39;: save_as,
+                                         &#39;height&#39;: height,
+                                         &#39;width&#39;: width,
+                                         &#39;scale&#39;: save_scale,
+                                      },
+             }
     
     if plot_it:
         fig.show(config=config)
@@ -7001,8 +7178,9 @@ define the species of interest.</dd>
     
     def __init__(self, db=&#34;OBIGT&#34;, messages=True, **kwargs):
         
-        if db == &#34;WORM&#34;:
-            reset(&#34;WORM&#34;, messages=messages)
+        if isinstance(db, str):
+            if db == &#34;WORM&#34;:
+                reset(&#34;WORM&#34;, messages=messages)
         
         args = {}
         for key, value in kwargs.items():
