@@ -2656,8 +2656,6 @@ class thermo:
         if isinstance(db, str):
             if db == "WORM":
                 reset("WORM", messages=messages)
-            else:
-                db = 
         
         args = {}
         for key, value in kwargs.items():
