@@ -117,14 +117,14 @@ def __flatten_list(_2d_list):
 
 
 def __save_figure(fig, save_as, save_format, save_scale, plot_width, plot_height, ppi):
-    
+
     if isinstance(save_format, str) and save_format not in ['png', 'jpg', 'jpeg', 'webp', 'svg', 'pdf', 'eps', 'json', 'html']:
         raise Exception("{}".format(save_format)+" is an unrecognized "
                         "save format. Supported formats include 'png', "
                         "'jpg', 'jpeg', 'webp', 'svg', 'pdf', 'eps', "
                         "'json', or 'html'")
 
-    if isinstance(save_format, str):
+    if isinstance(save_format, str) and save_as != None:
         if not isinstance(save_as, str):
             save_as = "newplot"
         if save_format=="html":
@@ -386,9 +386,12 @@ def retrieve(elements=None, ligands=None, state=None, T=None, P="Psat",
     return out
 
     
+    
 def animation(basis_args={}, species_args={}, affinity_args={},
               equilibrate_args=None, diagram_args={},
               anim_var="T", anim_range=[0, 350, 8],
+              save_as="newanimationframe", save_format="png", height=300,
+              width=400, save_scale=1,
               messages=False):
     
     """
@@ -607,7 +610,15 @@ def animation(basis_args={}, species_args={}, affinity_args={},
         fig.update_layout(legend_title=None)
 
         config = {'displaylogo': False,
-                  'modeBarButtonsToRemove': ['resetScale2d', 'toggleSpikelines']}
+                  'modeBarButtonsToRemove': ['resetScale2d', 'toggleSpikelines'],
+                  'toImageButtonOptions': {
+                                             'format': save_format, # one of png, svg, jpeg, webp
+                                             'filename': save_as,
+                                             'height': height,
+                                             'width': width,
+                                             'scale': save_scale,
+                                          },
+                 }
 
         fig.show(config=config)
         return
@@ -805,12 +816,21 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     config = {'displaylogo': False,
               'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'zoomIn2d', 'zoomOut2d',
                                          'autoScale2d', 'toggleSpikelines',
-                                         'hoverClosestCartesian', 'hoverCompareCartesian']}
+                                         'hoverClosestCartesian', 'hoverCompareCartesian'],
+              'toImageButtonOptions': {
+                                       'format': save_format, # one of png, svg, jpeg, webp
+                                       'filename': save_as,
+                                       'height': height,
+                                       'width': width,
+                                       'scale': save_scale,
+                                        },
+             }
+    
 
     fig.show(config=config)
 
     
-def diagram_interactive(data, title=None, borders=0,
+def diagram_interactive(data, title=None, borders=0, names=None,
                         annotation=None, annotation_coords=[0, 0],
                         balance=None, xlab=None, ylab=None, colormap="viridis",
                         width=600, height=520, alpha=False, messages=True,
@@ -831,6 +851,9 @@ def diagram_interactive(data, title=None, borders=0,
         If set to a value greater than 0, shows lines that indicate borders
         between regions in predominance diagrams. Value indicates thickness
         of the border, in pixels.
+    
+    names : str, optional
+        Names of species for activity lines or predominance fields.
     
     annotation : str, optional
         Annotation to add to the plot.
@@ -920,12 +943,15 @@ def diagram_interactive(data, title=None, borders=0,
         
         df = pd.DataFrame(flat_out_vals)
         sp = list(info([int(val) for val in list(data.rx2("values").names)], messages=False)["name"])
+        
+    if isinstance(names, list) and len(names)==len(sp):
+        sp = names
     
     df.index = sp
     df = df.transpose()
 
     if alpha and len(xyvars) == 1:
-        df = df.applymap(lambda x: 10**x)
+        df = df.map(lambda x: 10**x)
         df = df[sp].div(df[sp].sum(axis=1), axis=0)
         
     xvar = xyvars[0]
@@ -1070,22 +1096,6 @@ def diagram_interactive(data, title=None, borders=0,
                 yref="paper",
                 align='left',
                 bgcolor="rgba(255, 255, 255, 0.5)")
-                
-        save_as, save_format = __save_figure(fig, save_as, save_format, save_scale,
-                                             plot_width=width, plot_height=height, ppi=1)
-                
-        config = {'displaylogo': False,
-                  'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'zoomIn2d', 'zoomOut2d',
-                                             'autoScale2d', 'resetScale2d', 'toggleSpikelines',
-                                             'hoverClosestCartesian', 'hoverCompareCartesian'],
-                  'toImageButtonOptions': {
-                                             'format': save_format, # one of png, svg, jpeg, webp
-                                             'filename': save_as,
-                                             'height': height,
-                                             'width': width,
-                                             'scale': save_scale,
-                                          },
-                 }
         
         if borders > 0:
             
@@ -1176,6 +1186,22 @@ def diagram_interactive(data, title=None, borders=0,
             fig.update_yaxes(range=[min(yvals), max(yvals)], autorange=False, mirror=True)
             fig.update_xaxes(range=[min(xvals), max(xvals)], autorange=False, mirror=True)
         
+        
+    save_as, save_format = __save_figure(fig, save_as, save_format, save_scale,
+                                         plot_width=width, plot_height=height, ppi=1)
+
+    config = {'displaylogo': False,
+              'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'zoomIn2d', 'zoomOut2d',
+                                         'autoScale2d', 'resetScale2d', 'toggleSpikelines',
+                                         'hoverClosestCartesian', 'hoverCompareCartesian'],
+              'toImageButtonOptions': {
+                                         'format': save_format, # one of png, svg, jpeg, webp
+                                         'filename': save_as,
+                                         'height': height,
+                                         'width': width,
+                                         'scale': save_scale,
+                                      },
+             }
         
     if plot_it:
         fig.show(config=config)
@@ -1427,7 +1453,7 @@ def makeup(formula, multiplier=1, sum=False, count_zero=False, messages=True):
     out : dict
         Dictionary of elements and their counts in the formula(s).
     """
-    
+
     formula_R = _convert_to_RVector(formula, force_Rvec=False)
     
     args = {'formula':formula_R, "multiplier":multiplier,
@@ -1437,7 +1463,9 @@ def makeup(formula, multiplier=1, sum=False, count_zero=False, messages=True):
     capture.capture_r_output()
         
     out = CHNOSZ.makeup(**args)
-        
+
+    return out
+    
     if messages:
         for line in capture.stderr: print(line)
     
@@ -1816,7 +1844,11 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
     
     if interactive:
             
-        df, fig = diagram_interactive(data=eout, title=main, borders=borders,
+        df, fig = diagram_interactive(
+                                 data=eout,
+                                 title=main,
+                                 borders=borders,
+                                 names=names,
                                  annotation=annotation,
                                  annotation_coords=annotation_coords,
                                  balance=balance,
@@ -2621,8 +2653,11 @@ class thermo:
     
     def __init__(self, db="OBIGT", messages=True, **kwargs):
         
-        if db == "WORM":
-            reset("WORM", messages=messages)
+        if isinstance(db, str):
+            if db == "WORM":
+                reset("WORM", messages=messages)
+            else:
+                db = 
         
         args = {}
         for key, value in kwargs.items():
@@ -2828,6 +2863,7 @@ def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
 def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
                   xlim=None, ylim=None, line_type="markers+lines",
                   tol=None, title=None, res=10, width=500, height=400,
+                  save_as=None, save_format=None, save_scale=1,
                   show=False, messages=False, plot_it=True):
 
     """
@@ -2880,6 +2916,24 @@ def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
     
     width, height : numeric, default 500 by 400
         Width and height of the plot.
+
+    save_as : str, optional
+        For interactive plots only (`interactive`=True). Provide a filename to
+        save this figure. Filetype of saved figure is determined by
+        `save_format`.
+        Note: interactive plots can be saved by clicking the 'Download plot'
+        button in the plot's toolbar.
+
+    save_format : str, default "png"
+        For interactive plots only (`interactive`=True). Desired format of saved
+        or downloaded figure. Can be 'png', 'jpg', 'jpeg', 'webp', 'svg', 'pdf',
+        'eps', 'json', or 'html'. If 'html', an interactive plot will be saved.
+        Only 'png', 'svg', 'jpeg', and 'webp' can be downloaded with the
+        'download as' button in the toolbar of an interactive plot.
+
+    save_scale : numeric, default 1
+        For interactive plots only (`interactive`=True). Multiply
+        title/legend/axis/canvas sizes by this factor when saving the figure.
 
     messages : bool, default True
         Display messages from CHNOSZ?
@@ -2942,8 +2996,9 @@ def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
     if title == None:
         react_grid = output[0]["reaction"]
         react_grid["name"] = [name  if name != "water" else "H2O" for name in react_grid["name"]] # replace any "water" with "H2O" in the written reaction
-        reactants = " + ".join([(str(-int(react_grid["coeff"][i]) if isinstance(react_grid["coeff"][i], (int, np.integer)) else -react_grid["coeff"][i])+" " if -react_grid["coeff"][i] != 1 else "") + html_chemname_format(react_grid["name"][i]) for i in range(0, len(react_grid["name"])) if react_grid["coeff"][i] < 0])
-        products = " + ".join([(str(int(react_grid["coeff"][i]) if isinstance(react_grid["coeff"][i], (int, np.integer)) else react_grid["coeff"][i])+" " if react_grid["coeff"][i] != 1 else "") + html_chemname_format(react_grid["name"][i]) for i in range(0, len(react_grid["name"])) if react_grid["coeff"][i] > 0])
+        
+        reactants = " + ".join([(str(-int(react_grid["coeff"].iloc[i]) if isinstance(react_grid["coeff"].iloc[i], (int, np.integer)) else -react_grid["coeff"].iloc[i])+" " if -react_grid["coeff"].iloc[i] != 1 else "") + html_chemname_format(react_grid["name"].iloc[i]) for i in range(0, len(react_grid["name"])) if react_grid["coeff"].iloc[i] < 0])
+        products = " + ".join([(str(int(react_grid["coeff"].iloc[i]) if isinstance(react_grid["coeff"].iloc[i], (int, np.integer)) else react_grid["coeff"].iloc[i])+" " if react_grid["coeff"].iloc[i] != 1 else "") + html_chemname_format(react_grid["name"].iloc[i]) for i in range(0, len(react_grid["name"])) if react_grid["coeff"].iloc[i] > 0])
         
         title = reactants + " = " + products
     
@@ -2961,8 +3016,19 @@ def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
     if isinstance(ylim, list):
         fig.update_yaxes(range = ylim)
     
+    save_as, save_format = __save_figure(fig, save_as, save_format, save_scale,
+                                         plot_width=width, plot_height=height, ppi=1)
+    
     config = {'displaylogo': False,
-              'modeBarButtonsToRemove': ['resetScale2d', 'toggleSpikelines']}
+              'modeBarButtonsToRemove': ['resetScale2d', 'toggleSpikelines'],
+              'toImageButtonOptions': {
+                                         'format': save_format, # one of png, svg, jpeg, webp
+                                         'filename': save_as,
+                                         'height': height,
+                                         'width': width,
+                                         'scale': save_scale,
+                                      },
+             }
     
     if plot_it:
         fig.show(config=config)
