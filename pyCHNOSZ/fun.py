@@ -454,45 +454,59 @@ def animation(basis_args={}, species_args={}, affinity_args={},
         raise Exception("anim_range must be a list with three values: starting "
                         "value of anim_var, stopping value, and number of "
                         "frames in the animation")
-    
+
     if isinstance(basis_args, dict):
         if "species" not in basis_args.keys():
-            raise Exception("basis_args needs a list of basis species for 'species'. "
+            raise Exception("basis_args needs to contain a list of species for 'species'. "
                             "Example: basis_args={'species':['CO2', 'O2', 'H2O', 'H+']}")
     else:
         raise Exception("basis_args needs to be a Python dictionary with a key "
                         "called 'species' (additional keys are optional). "
                         "Example: basis_args={'species':['CO2', 'O2', 'H2O', 'H+']}")
-    
+
+    basis_sp = basis_args["species"]
+    basis_out = basis(**basis_args)
+
     if isinstance(species_args, dict):
         if "species" not in species_args.keys():
-            raise Exception("species_args needs a list of species for 'species'. "
+            raise Exception("species_args needs to contain a list of species for 'species'. "
                             "Example: species_args={'species':['CO2', 'HCO3-', 'CO3-2']}")
+        species_args_list = [species_args]
+    elif isinstance(species_args, list):
+        species_args_list = species_args
+        for species_args in species_args_list:
+            if "species" not in species_args.keys():
+                raise Exception("species_args needs to contain a list of species for 'species'. "
+                                "Example: species_args={'species':['CO2', 'HCO3-', 'CO3-2']}")
     else:
-        raise Exception("species_args needs to be a Python dictionary with a key "
+        raise Exception("species_args needs to be either a Python dictionary with a key "
                         "called 'species' (additional keys are optional). "
-                        "Example: species_args={'species':['CO2', 'HCO3-', 'CO3-2']}")
+                        "Example: species_args={'species':['CO2', 'HCO3-', 'CO3-2']}"
+                        "or else species_args needs to be a list of Python dictionaries."
+                        "Example: species_args=[{'species':['CO2', 'HCO3-', 'CO3-2'], 'state':[-4]},"
+                        "{'species':['graphite'], state:[0], 'add':True}]")
+
+    # There may be multiple arguments passed to species, especially in cases
+    # where add=True. Loop through all the arguments to apply them.
+    for species_args in species_args_list:
+        if "logact" in species_args.keys():
+            mod_species_logact = copy.copy(species_args['logact'])
+            del species_args['logact']
+        else:
+            mod_species_logact = []
     
-    basis_sp = basis_args["species"]
-    sp = species_args["species"]
-    
+        species_out = species(**species_args)
+        
+        if len(mod_species_logact)>0:
+            for i in range(0, len(mod_species_logact)) :
+                species_out = species(species_args["species"][i], mod_species_logact[i])
+
+
+    sp = list(species_out["name"])
+
     if isinstance(sp[0], (int, np.integer)):
         sp = [info(s, messages=False)["name"].values[0] for s in sp]
-    
-    basis_out = basis(**basis_args)
-    
-    if "logact" in species_args.keys():
-        mod_species_logact = copy.copy(species_args['logact'])
-        del species_args['logact']
-    else:
-        mod_species_logact = []
-    
-    species_out = species(**species_args)
-    
-    if len(mod_species_logact)>0:
-        for i in range(0, len(mod_species_logact)) :
-            species_out = species(species_args["species"][i], mod_species_logact[i])
-            
+
     dfs = []
     dmaps = []
     dmaps_names = []

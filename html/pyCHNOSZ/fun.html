@@ -2813,13 +2813,14 @@ def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
     coeff = _convert_to_RVector(coeff, force_Rvec=False)
     pressures = _convert_to_RVector(pressures, force_Rvec=False)
     temperatures = _convert_to_RVector(temperatures, force_Rvec=False)
-    
+
     capture = R_output()
     capture.capture_r_output()
 
     r_univariant = pkg_resources.resource_string(
         __name__, &#39;univariant.r&#39;).decode(&#34;utf-8&#34;)
     ro.r(r_univariant)
+    
     if solve==&#34;T&#34;:
         a = ro.r.uc_solveT(logK=logK,
                            species=species,
@@ -6452,13 +6453,14 @@ number of decimal places in logK, with a maximum default tolerance of
     coeff = _convert_to_RVector(coeff, force_Rvec=False)
     pressures = _convert_to_RVector(pressures, force_Rvec=False)
     temperatures = _convert_to_RVector(temperatures, force_Rvec=False)
-    
+
     capture = R_output()
     capture.capture_r_output()
 
     r_univariant = pkg_resources.resource_string(
         __name__, &#39;univariant.r&#39;).decode(&#34;utf-8&#34;)
     ro.r(r_univariant)
+    
     if solve==&#34;T&#34;:
         a = ro.r.uc_solveT(logK=logK,
                            species=species,
