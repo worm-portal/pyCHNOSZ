@@ -434,8 +434,11 @@ def animation(basis_args={}, species_args={}, affinity_args={},
 
     species_args : dict
         Dictionary of options for defining species (see `species`) in the
-        animated diagram.
-        Example: species_args={&#39;species&#39;:[&#39;CO2&#39;, &#39;HCO3-&#39;, &#39;CO3-2&#39;]}
+        animated diagram, or a list of dicts.
+        Example 1: species_args={&#39;species&#39;:[&#39;CO2&#39;, &#39;HCO3-&#39;, &#39;CO3-2&#39;]}
+        Example 2: species_args=[
+                {&#39;species&#39;:[&#39;CO2&#39;, &#39;HCO3-&#39;, &#39;CO3-2&#39;], &#39;state&#39;:[-4]},
+                {&#39;species&#39;:[&#39;graphite&#39;], state:[0], &#39;add&#39;:True}]
 
     affinity_args : dict
         Dictionary of options for defining the affinity calculation (see
@@ -482,45 +485,59 @@ def animation(basis_args={}, species_args={}, affinity_args={},
         raise Exception(&#34;anim_range must be a list with three values: starting &#34;
                         &#34;value of anim_var, stopping value, and number of &#34;
                         &#34;frames in the animation&#34;)
-    
+
     if isinstance(basis_args, dict):
         if &#34;species&#34; not in basis_args.keys():
-            raise Exception(&#34;basis_args needs a list of basis species for &#39;species&#39;. &#34;
+            raise Exception(&#34;basis_args needs to contain a list of species for &#39;species&#39;. &#34;
                             &#34;Example: basis_args={&#39;species&#39;:[&#39;CO2&#39;, &#39;O2&#39;, &#39;H2O&#39;, &#39;H+&#39;]}&#34;)
     else:
         raise Exception(&#34;basis_args needs to be a Python dictionary with a key &#34;
                         &#34;called &#39;species&#39; (additional keys are optional). &#34;
                         &#34;Example: basis_args={&#39;species&#39;:[&#39;CO2&#39;, &#39;O2&#39;, &#39;H2O&#39;, &#39;H+&#39;]}&#34;)
-    
+
+    basis_sp = basis_args[&#34;species&#34;]
+    basis_out = basis(**basis_args)
+
     if isinstance(species_args, dict):
         if &#34;species&#34; not in species_args.keys():
-            raise Exception(&#34;species_args needs a list of species for &#39;species&#39;. &#34;
+            raise Exception(&#34;species_args needs to contain a list of species for &#39;species&#39;. &#34;
                             &#34;Example: species_args={&#39;species&#39;:[&#39;CO2&#39;, &#39;HCO3-&#39;, &#39;CO3-2&#39;]}&#34;)
+        species_args_list = [species_args]
+    elif isinstance(species_args, list):
+        species_args_list = species_args
+        for species_args in species_args_list:
+            if &#34;species&#34; not in species_args.keys():
+                raise Exception(&#34;species_args needs to contain a list of species for &#39;species&#39;. &#34;
+                                &#34;Example: species_args={&#39;species&#39;:[&#39;CO2&#39;, &#39;HCO3-&#39;, &#39;CO3-2&#39;]}&#34;)
     else:
-        raise Exception(&#34;species_args needs to be a Python dictionary with a key &#34;
+        raise Exception(&#34;species_args needs to be either a Python dictionary with a key &#34;
                         &#34;called &#39;species&#39; (additional keys are optional). &#34;
-                        &#34;Example: species_args={&#39;species&#39;:[&#39;CO2&#39;, &#39;HCO3-&#39;, &#39;CO3-2&#39;]}&#34;)
+                        &#34;Example: species_args={&#39;species&#39;:[&#39;CO2&#39;, &#39;HCO3-&#39;, &#39;CO3-2&#39;]}&#34;
+                        &#34;or else species_args needs to be a list of Python dictionaries.&#34;
+                        &#34;Example: species_args=[{&#39;species&#39;:[&#39;CO2&#39;, &#39;HCO3-&#39;, &#39;CO3-2&#39;], &#39;state&#39;:[-4]},&#34;
+                        &#34;{&#39;species&#39;:[&#39;graphite&#39;], state:[0], &#39;add&#39;:True}]&#34;)
+
+    # There may be multiple arguments passed to species, especially in cases
+    # where add=True. Loop through all the arguments to apply them.
+    for species_args in species_args_list:
+        if &#34;logact&#34; in species_args.keys():
+            mod_species_logact = copy.copy(species_args[&#39;logact&#39;])
+            del species_args[&#39;logact&#39;]
+        else:
+            mod_species_logact = []
     
-    basis_sp = basis_args[&#34;species&#34;]
-    sp = species_args[&#34;species&#34;]
-    
+        species_out = species(**species_args)
+        
+        if len(mod_species_logact)&gt;0:
+            for i in range(0, len(mod_species_logact)) :
+                species_out = species(species_args[&#34;species&#34;][i], mod_species_logact[i])
+
+
+    sp = list(species_out[&#34;name&#34;])
+
     if isinstance(sp[0], (int, np.integer)):
         sp = [info(s, messages=False)[&#34;name&#34;].values[0] for s in sp]
-    
-    basis_out = basis(**basis_args)
-    
-    if &#34;logact&#34; in species_args.keys():
-        mod_species_logact = copy.copy(species_args[&#39;logact&#39;])
-        del species_args[&#39;logact&#39;]
-    else:
-        mod_species_logact = []
-    
-    species_out = species(**species_args)
-    
-    if len(mod_species_logact)&gt;0:
-        for i in range(0, len(mod_species_logact)) :
-            species_out = species(species_args[&#34;species&#34;][i], mod_species_logact[i])
-            
+
     dfs = []
     dmaps = []
     dmaps_names = []
@@ -3494,8 +3511,11 @@ animated diagram.
 Example: basis_args={'species':['CO2', 'O2', 'H2O', 'H+']}</dd>
 <dt><strong><code>species_args</code></strong> :&ensp;<code>dict</code></dt>
 <dd>Dictionary of options for defining species (see <code><a title="pyCHNOSZ.fun.species" href="#pyCHNOSZ.fun.species">species()</a></code>) in the
-animated diagram.
-Example: species_args={'species':['CO2', 'HCO3-', 'CO3-2']}</dd>
+animated diagram, or a list of dicts.
+Example 1: species_args={'species':['CO2', 'HCO3-', 'CO3-2']}
+Example 2: species_args=[
+{'species':['CO2', 'HCO3-', 'CO3-2'], 'state':[-4]},
+{'species':['graphite'], state:[0], 'add':True}]</dd>
 <dt><strong><code>affinity_args</code></strong> :&ensp;<code>dict</code></dt>
 <dd>Dictionary of options for defining the affinity calculation (see
 <code><a title="pyCHNOSZ.fun.affinity" href="#pyCHNOSZ.fun.affinity">affinity()</a></code>).
@@ -3543,8 +3563,11 @@ number of animation frames.</dd>
 
     species_args : dict
         Dictionary of options for defining species (see `species`) in the
-        animated diagram.
-        Example: species_args={&#39;species&#39;:[&#39;CO2&#39;, &#39;HCO3-&#39;, &#39;CO3-2&#39;]}
+        animated diagram, or a list of dicts.
+        Example 1: species_args={&#39;species&#39;:[&#39;CO2&#39;, &#39;HCO3-&#39;, &#39;CO3-2&#39;]}
+        Example 2: species_args=[
+                {&#39;species&#39;:[&#39;CO2&#39;, &#39;HCO3-&#39;, &#39;CO3-2&#39;], &#39;state&#39;:[-4]},
+                {&#39;species&#39;:[&#39;graphite&#39;], state:[0], &#39;add&#39;:True}]
 
     affinity_args : dict
         Dictionary of options for defining the affinity calculation (see
@@ -3591,45 +3614,59 @@ number of animation frames.</dd>
         raise Exception(&#34;anim_range must be a list with three values: starting &#34;
                         &#34;value of anim_var, stopping value, and number of &#34;
                         &#34;frames in the animation&#34;)
-    
+
     if isinstance(basis_args, dict):
         if &#34;species&#34; not in basis_args.keys():
-            raise Exception(&#34;basis_args needs a list of basis species for &#39;species&#39;. &#34;
+            raise Exception(&#34;basis_args needs to contain a list of species for &#39;species&#39;. &#34;
                             &#34;Example: basis_args={&#39;species&#39;:[&#39;CO2&#39;, &#39;O2&#39;, &#39;H2O&#39;, &#39;H+&#39;]}&#34;)
     else:
         raise Exception(&#34;basis_args needs to be a Python dictionary with a key &#34;
                         &#34;called &#39;species&#39; (additional keys are optional). &#34;
                         &#34;Example: basis_args={&#39;species&#39;:[&#39;CO2&#39;, &#39;O2&#39;, &#39;H2O&#39;, &#39;H+&#39;]}&#34;)
-    
+
+    basis_sp = basis_args[&#34;species&#34;]
+    basis_out = basis(**basis_args)
+
     if isinstance(species_args, dict):
         if &#34;species&#34; not in species_args.keys():
-            raise Exception(&#34;species_args needs a list of species for &#39;species&#39;. &#34;
+            raise Exception(&#34;species_args needs to contain a list of species for &#39;species&#39;. &#34;
                             &#34;Example: species_args={&#39;species&#39;:[&#39;CO2&#39;, &#39;HCO3-&#39;, &#39;CO3-2&#39;]}&#34;)
+        species_args_list = [species_args]
+    elif isinstance(species_args, list):
+        species_args_list = species_args
+        for species_args in species_args_list:
+            if &#34;species&#34; not in species_args.keys():
+                raise Exception(&#34;species_args needs to contain a list of species for &#39;species&#39;. &#34;
+                                &#34;Example: species_args={&#39;species&#39;:[&#39;CO2&#39;, &#39;HCO3-&#39;, &#39;CO3-2&#39;]}&#34;)
     else:
-        raise Exception(&#34;species_args needs to be a Python dictionary with a key &#34;
+        raise Exception(&#34;species_args needs to be either a Python dictionary with a key &#34;
                         &#34;called &#39;species&#39; (additional keys are optional). &#34;
-                        &#34;Example: species_args={&#39;species&#39;:[&#39;CO2&#39;, &#39;HCO3-&#39;, &#39;CO3-2&#39;]}&#34;)
+                        &#34;Example: species_args={&#39;species&#39;:[&#39;CO2&#39;, &#39;HCO3-&#39;, &#39;CO3-2&#39;]}&#34;
+                        &#34;or else species_args needs to be a list of Python dictionaries.&#34;
+                        &#34;Example: species_args=[{&#39;species&#39;:[&#39;CO2&#39;, &#39;HCO3-&#39;, &#39;CO3-2&#39;], &#39;state&#39;:[-4]},&#34;
+                        &#34;{&#39;species&#39;:[&#39;graphite&#39;], state:[0], &#39;add&#39;:True}]&#34;)
+
+    # There may be multiple arguments passed to species, especially in cases
+    # where add=True. Loop through all the arguments to apply them.
+    for species_args in species_args_list:
+        if &#34;logact&#34; in species_args.keys():
+            mod_species_logact = copy.copy(species_args[&#39;logact&#39;])
+            del species_args[&#39;logact&#39;]
+        else:
+            mod_species_logact = []
     
-    basis_sp = basis_args[&#34;species&#34;]
-    sp = species_args[&#34;species&#34;]
-    
+        species_out = species(**species_args)
+        
+        if len(mod_species_logact)&gt;0:
+            for i in range(0, len(mod_species_logact)) :
+                species_out = species(species_args[&#34;species&#34;][i], mod_species_logact[i])
+
+
+    sp = list(species_out[&#34;name&#34;])
+
     if isinstance(sp[0], (int, np.integer)):
         sp = [info(s, messages=False)[&#34;name&#34;].values[0] for s in sp]
-    
-    basis_out = basis(**basis_args)
-    
-    if &#34;logact&#34; in species_args.keys():
-        mod_species_logact = copy.copy(species_args[&#39;logact&#39;])
-        del species_args[&#39;logact&#39;]
-    else:
-        mod_species_logact = []
-    
-    species_out = species(**species_args)
-    
-    if len(mod_species_logact)&gt;0:
-        for i in range(0, len(mod_species_logact)) :
-            species_out = species(species_args[&#34;species&#34;][i], mod_species_logact[i])
-            
+
     dfs = []
     dmaps = []
     dmaps_names = []

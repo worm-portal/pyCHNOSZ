@@ -406,8 +406,11 @@ def animation(basis_args={}, species_args={}, affinity_args={},
 
     species_args : dict
         Dictionary of options for defining species (see `species`) in the
-        animated diagram.
-        Example: species_args={'species':['CO2', 'HCO3-', 'CO3-2']}
+        animated diagram, or a list of dicts.
+        Example 1: species_args={'species':['CO2', 'HCO3-', 'CO3-2']}
+        Example 2: species_args=[
+                {'species':['CO2', 'HCO3-', 'CO3-2'], 'state':[-4]},
+                {'species':['graphite'], state:[0], 'add':True}]
 
     affinity_args : dict
         Dictionary of options for defining the affinity calculation (see
