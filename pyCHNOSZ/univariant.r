@@ -2,7 +2,6 @@
 # Summary: functions to calculate temperatures at given logK and pressures, calculate
 #          pressures at given logK and temperatures, and to export and plot results.
 # Author: Grayson Boyer
-# Last updated: September 20, 2021
 
 ########### UNIVARIANT CURVE FUNCTIONS ###########
 
@@ -73,7 +72,7 @@ uc_solveT <- function(logK, species, state, coeff,
 
         this_P <- sprintf("%.3f", round(pressure, 3))
         df[df[, "P"] == this_P, "T"] <- sprintf("%.3f", round(guessT, 3))
-        
+
         if("rho" %in% names(guess_calc$out)){
           df[df[, "P"] == this_P, "rho"] <- sprintf("%.3f", round(guess_calc$out$rho, 3))
         }
@@ -182,14 +181,12 @@ uc_solveT <- function(logK, species, state, coeff,
 
 
 
-
 uc_solveP <- function(logK, species, state, coeff,
-                      temperatures = 1, IS=0,
-                      minP = 1, maxP = 500, tol=0.00001){
+                      temperatures = 25, IS=0, minP = 0.1, maxP = 100, tol=0.00001){
     
   user_minP <- minP
   user_maxP <- maxP
-
+    
   # create a data frame to hold results
   PlH <- rep(NA, length(temperatures)) # placeholder
 
@@ -204,7 +201,7 @@ uc_solveP <- function(logK, species, state, coeff,
                    Cp = PlH,
                    stringsAsFactors=FALSE
                  )
-
+    
   for (temperature in temperatures){
 
     minP <- user_minP
@@ -214,20 +211,47 @@ uc_solveP <- function(logK, species, state, coeff,
 
     while(!converged){
       if(completed_iter > 100){
-        print("Too many iterations (>100). Terminating calculation.")
+        warning("Too many iterations (>100). Terminating calculation.")
         break
       }
 
-      # perform a subcrt calculation using a guess
-      guessP <- mean(c(minP, maxP))
-      guess_calc <- suppressMessages(subcrt(species, state, coeff, P = guessP, T = temperature, IS=IS))
-      guesslogK <- guess_calc$out$logK
-
+      # Perform a subcrt calculation using a guessed temperature.
+      # The point of this block is to find a logK that is not NA or infinite.
+      found_guesslogK <- FALSE
+      iter_guesslogK <- 0
+      while(!found_guesslogK){
+        if(iter_guesslogK == 0){
+          guessP <- mean(c(minP, maxP))
+        }else if(iter_guesslogK <= 20){
+          guessP <- seq(minP, maxP, length.out=20)[iter_guesslogK]
+        }else{
+          message("Could not find a viable temperature guess in this range after 20 tries. Terminating calculation.")
+          break
+        }
+            
+        guess_calc <- suppressMessages(subcrt(species, state, coeff, T=temperature, P=guessP, IS=IS, exceed.Ttr=T))
+        guesslogK <- guess_calc$out$logK
+          
+        if(!is.na(guesslogK) && is.finite(guesslogK)){
+          found_guesslogK <- TRUE
+        }else{
+          iter_guesslogK <- iter_guesslogK + 1
+        }
+      }
+    
+      if(is.na(guesslogK) | !is.finite(guesslogK)){
+        break
+      }
+        
       # check if initial guess is close enough to actual logK within tolerance
       if(abs(logK - guesslogK) < tol){
+
         this_T <- sprintf("%.3f", round(temperature, 3))
         df[df[, "T"] == this_T, "P"] <- sprintf("%.3f", round(guessP, 3))
-        df[df[, "T"] == this_T, "rho"] <- sprintf("%.3f", round(guess_calc$out$rho, 3))
+
+        if("rho" %in% names(guess_calc$out)){
+          df[df[, "T"] == this_T, "rho"] <- sprintf("%.3f", round(guess_calc$out$rho, 3))
+        }
         df[df[, "T"] == this_T, "logK"] <- sprintf("%.3f", round(guesslogK, 3))
         df[df[, "T"] == this_T, "G"] <- sprintf("%.0f", round(guess_calc$out$G, 0))
         df[df[, "T"] == this_T, "H"] <- sprintf("%.0f", round(guess_calc$out$H, 0))
@@ -236,14 +260,13 @@ uc_solveP <- function(logK, species, state, coeff,
         df[df[, "T"] == this_T, "Cp"] <- sprintf("%.1f", round(guess_calc$out$Cp, 1))
 
         result <- list(reaction = guess_calc$reaction, out = df)
-
+        previous_P <- guessP
         converged <- TRUE
         break
       }
 
       # perform an initial calculation across a range of temperatures bounded by current minT and maxT
-      init_calc <- suppressMessages(subcrt(species, state, coeff, P = seq(minP, maxP, length.out = 10), T = temperature, IS=IS)$out)
-
+      init_calc <- suppressMessages(subcrt(species, state, coeff, P=seq(minP, maxP, length.out=200), T=temperature, IS=IS, exceed.Ttr=T)$out)
 
       # Check if logK falls between any of the temperature iterations in the initial calculation
       logK_check_complete <- FALSE
@@ -251,13 +274,15 @@ uc_solveP <- function(logK, species, state, coeff,
 
         logKmin <- init_calc$logK[i]
         logKmax <- init_calc$logK[i+1]
+          
         if ((!is.finite(logKmin)) | (!is.finite(logKmax))){
+            
           if(!("Warning" %in% colnames(df))){
             df$Warning <-PlH # create 'Warning' column
           }
 
-          this_T <- sprintf("%.3f", round(pressure, 3))
-          df[df[, "T"] == this_T, "Warning"] <- paste("Could not converge on P for this T within", user_minP, "and", user_maxP, "bars")
+          this_T <- sprintf("%.3f", round(temperature, 3))
+          df[df[, "T"] == this_T, "Warning"] <- paste("Could not converge on P for this T within", user_minP, "and", user_maxP, "bar(s)")
             
           result <- list(reaction = guess_calc$reaction, out = df)
           converged <- TRUE
@@ -292,20 +317,21 @@ uc_solveP <- function(logK, species, state, coeff,
           logK_check_complete <- TRUE
           break
         } else if ((i == (length(init_calc$logK)-1)) & (!logK_check_complete)){
+            
           if(!("Warning" %in% colnames(df))){
             df$Warning <-PlH # create 'Warning' column
           }
 
           this_T <- sprintf("%.3f", round(temperature, 3))
-          df[df[, "T"] == this_T, "Warning"] <- paste("Could not converge on P for this T within", user_minP, "and", user_maxP, "bars")
-
-          result <- list(reaction = guess_calc$reaction, out = df)
+          df[df[, "T"] == this_T, "Warning"] <- paste("Could not converge on P for this T within", user_minP, "and", user_maxP, "bar(s)")
+            
+          result <- list(reaction=guess_calc$reaction, out=df)
           converged <- TRUE
         }
 
 
       } # end logK for loop
-
+        
       completed_iter <- completed_iter + 1 # increase iteration counter
 
     } # end !converged while loop
@@ -315,19 +341,20 @@ uc_solveP <- function(logK, species, state, coeff,
   # convert columns to numeric
   df <- result[["out"]]
   cols.num <- c("P", "T", "logK", "G", "H", "S", "V", "Cp")
-    
+
   if(!("rho" %in% names(guess_calc$out))){
     df <- df[ , -which(names(df) %in% c("rho"))] # drop the empty rho column
   }else{
     cols.num <- c(cols.num, "rho")
   }
-    
+
   df[cols.num] <- sapply(df[cols.num], as.numeric)
   result[["out"]] <- df
     
   return(result)
 
 } # end uc_solveP function
+
 
 write_csv_output <- function(result, create_output_csv=F){
     # write csv table
@@ -336,10 +363,17 @@ write_csv_output <- function(result, create_output_csv=F){
     }
 }
 
+
 ### Create plot temperature-based
 create_output_plot_T <- function(logK, species, state, coeff, pressures, minT, maxT, res=300){
-    # print(as.numeric(as.character(result$out$T)))
-    calc <- subcrt(species, state, coeff, T=seq(minT, maxT, length.out=res), P=pressures[1])$out$logK
+
+    subcrt_results <- list()
+    for(i in 1:length(pressures)){
+      subcrt_results[[i]] <- subcrt(species, state, coeff, T=seq(minT, maxT, length.out=res), P=pressures[i], exceed.Ttr=T)$out$logK
+    }
+    
+    calc <- unlist(subcrt_results)
+    calc <- calc[is.finite(calc)]
 
     if(min(calc, na.rm=T) != Inf){
         if(logK < min(calc, na.rm=T)){
@@ -349,6 +383,8 @@ create_output_plot_T <- function(logK, species, state, coeff, pressures, minT, m
         } else {
             this_ylim <- c(min(calc, na.rm=T), max(calc, na.rm=T))
         }
+    }else{
+      this_ylim <- c(logK-1, logK+1)
     }
 
     plot(x=NA,
@@ -360,17 +396,27 @@ create_output_plot_T <- function(logK, species, state, coeff, pressures, minT, m
          type="l")
     grid (NULL, NULL, lty = 1, col = "lightgray")
     lines(x=seq(minT, maxT, length.out=res), y=rep(logK, res), col="red", lwd=3)
+
     for(pressure in pressures){
       lines(x=seq(minT, maxT, length.out=res),
-            y=subcrt(species, state, coeff, T=seq(minT, maxT, length.out=res), P=pressure)$out$logK)
+            y=subcrt(species, state, coeff, T=seq(minT, maxT, length.out=res), P=pressure, exceed.Ttr=T)$out$logK)
     }
     
 }
 
+
+
+
 ### Create plot pressure-based
 create_output_plot_P <- function(logK, species, state, coeff, temperatures, minP, maxP, res=300){
-    #print(as.numeric(as.character(result$out$T)))
-    calc <- subcrt(species, state, coeff, P=seq(minP, maxP, length.out=res), T=temperatures[1])$out$logK
+
+    subcrt_results <- list()
+    for(i in 1:length(temperatures)){
+      subcrt_results[[i]] <- subcrt(species, state, coeff, P=seq(minP, maxP, length.out=res), T=temperatures[i], exceed.Ttr=T)$out$logK
+    }
+    
+    calc <- unlist(subcrt_results)
+    calc <- calc[is.finite(calc)]
 
     if(min(calc, na.rm=T) != Inf){
         if(logK < min(calc, na.rm=T)){
@@ -380,24 +426,25 @@ create_output_plot_P <- function(logK, species, state, coeff, temperatures, minP
         } else {
             this_ylim <- c(min(calc, na.rm=T), max(calc, na.rm=T))
         }
+    }else{
+      this_ylim <- c(logK-1, logK+1)
     }
 
     plot(x=NA,
          y=NA,
-         xlim=c(minP-1, maxP+1),
+         xlim=c(minP-10, maxP+10),
          ylim=this_ylim,
          ylab="logK",
-         xlab="Pressure (bars)",
+         xlab=expression("Pressure (bar)"),
          type="l")
     grid (NULL, NULL, lty = 1, col = "lightgray")
     lines(x=seq(minP, maxP, length.out=res), y=rep(logK, res), col="red", lwd=3)
     for(temperature in temperatures){
       lines(x=seq(minP, maxP, length.out=res),
-            y=subcrt(species, state, coeff, P=seq(minP, maxP, length.out=res), T=temperature)$out$logK)
+            y=subcrt(species, state, coeff, P=seq(minP, maxP, length.out=res), T=temperature, exceed.Ttr=T)$out$logK)
     }
     
 }
-
 
 thermoinfo <- function(species){
     return(info(info(species)))

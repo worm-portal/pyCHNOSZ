@@ -2785,13 +2785,14 @@ def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
     coeff = _convert_to_RVector(coeff, force_Rvec=False)
     pressures = _convert_to_RVector(pressures, force_Rvec=False)
     temperatures = _convert_to_RVector(temperatures, force_Rvec=False)
-    
+
     capture = R_output()
     capture.capture_r_output()
 
     r_univariant = pkg_resources.resource_string(
         __name__, 'univariant.r').decode("utf-8")
     ro.r(r_univariant)
+    
     if solve=="T":
         a = ro.r.uc_solveT(logK=logK,
                            species=species,
