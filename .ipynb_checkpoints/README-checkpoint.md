@@ -18,6 +18,7 @@ The following CHNOSZ functions are supported in pyCHNOSZ:
 - [equilibrate](https://chnosz.net/manual/equilibrate.html) - Calculate equilibrium chemical activities of species from the affinities of formation of the species at unit activity.
 - [affinity](https://chnosz.net/manual/affinity.html) - Calculate the chemical affinities of formation reactions of species.
 - [diagram](https://chnosz.net/manual/diagram.html) - Plot equilibrium chemical activity (1-D speciation) or equal-activity (2-D predominance) diagrams as a function of chemical activities of basis species, temperature and/or pressure.
+- And more. See the [documentation for pyCHNOSZ](https://worm-portal.asu.edu/pyCHNOSZ-docs/fun.html)
 
 
 ## Requirements
