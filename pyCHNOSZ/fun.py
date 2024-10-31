@@ -2424,7 +2424,7 @@ def info(species, state=None, check_it=True, messages=True):
 def subcrt(species, coeff=None, state=None,
            property=["logK", "G", "H", "S", "V", "Cp"],
            T=None, P=None, grid=None,
-           convert=True, exceed_Ttr=False, exceed_rhomin=False,
+           convert=True, exceed_Ttr=True, exceed_rhomin=False,
            logact=None, autobalance=True, IS=None, messages=True,
            show=True):
     
@@ -2458,7 +2458,7 @@ def subcrt(species, coeff=None, state=None,
     grid : str, default None
         Type of PxT grid to produce (None, the default, means no gridding).
 
-    exceed_Ttr : bool, default False
+    exceed_Ttr : bool, default True
         Calculate Gibbs energies of mineral phases and other species beyond
         their transition temperatures?
 
