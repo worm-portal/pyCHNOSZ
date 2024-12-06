@@ -24,9 +24,12 @@ import logging
 rpy2.rinterface_lib.callbacks.logger.setLevel(logging.ERROR)   # will display errors, but not warnings
 
 import rpy2.robjects as ro
+from rpy2.robjects import conversion, default_converter # necessary to get rpy2 working in dash apps
 from rpy2.robjects.packages import importr
 from rpy2.robjects import pandas2ri
 from rpy2.robjects.lib import grdevices
+
+from WORMutils import chemlabel
 
 pandas2ri.activate()
 
@@ -34,7 +37,6 @@ CHNOSZ = importr("CHNOSZ")
 grdev = importr('grDevices')
 
 NumberTypes = (int, float, complex)
-
 
 def _can_connect_to(url) -> bool:  # `bool` is a type hint for the return type of the function
     try:
@@ -144,41 +146,6 @@ def __save_figure(fig, save_as, save_format, save_scale, plot_width, plot_height
         save_format = "png"
 
     return save_as, save_format
-
-
-def html_chemname_format(name):
-    
-    """
-    Format a chemical formula to display subscripts and superscripts in HTML
-    (e.g., Plotly plots)
-    Example, "CH3COO-" becomes "CH<sub>3</sub>COO<sup>-</sup>"
-    
-    Parameters
-    ----------
-    name : str
-        A chemical formula.
-    
-    Returns
-    -------
-    A formatted chemical formula string.
-    """
-    
-    p = re.compile(r'(?P<sp>[-+]\d*?$)')
-    name = p.sub(r'<sup>\g<sp></sup>', name)
-    charge = re.search(r'<.*$', name)
-
-    name_no_charge = re.match(r'(?:(?!<|$).)*', name).group(0)
-    mapping = {"0": "<sub>0</sub>", "1": "<sub>1</sub>", "2": "<sub>2</sub>", "3": "<sub>3</sub>", "4": "<sub>4</sub>", 
-           "5": "<sub>5</sub>", "6": "<sub>6</sub>", "7": "<sub>7</sub>", "8": "<sub>8</sub>", "9": "<sub>9</sub>",
-           ".":"<sub>.</sub>"}
-    name_no_charge_formatted = "".join([mapping.get(x) or x for x in list(name_no_charge)])
-
-    if charge != None:
-        name = name_no_charge_formatted + charge.group(0)
-    else:
-        name = name_no_charge_formatted
-
-    return name
 
 
 def __seq(start, end, by=None, length_out=None):
@@ -685,7 +652,7 @@ def animation(basis_args={}, species_args={}, affinity_args={},
                     y=namey,
                     xref="x",
                     yref="y",
-                    text=html_chemname_format(s),
+                    text=chemlabel(s),
                     bgcolor="rgba(255, 255, 255, 0.5)",
                     showarrow=False,
                     )
@@ -727,14 +694,14 @@ def animation(basis_args={}, species_args={}, affinity_args={},
             ylab = diagram_args["ylab"]
             hover_ylab = ylab+': %{y} '
         else:
-            ylab = html_chemname_format(ylab)
+            ylab = chemlabel(ylab)
             hover_ylab = yvar+': %{y} '+unit_dict[yvar]
 
         if 'xlab' in diagram_args.keys():
             xlab = diagram_args["xlab"]
             hover_xlab = xlab+': %{x} '
         else:
-            xlab = html_chemname_format(xlab)
+            xlab = chemlabel(xlab)
             hover_xlab = xvar+': %{x} '+unit_dict[xvar]
         
         heatmaps_i = go.Heatmap(z=dmaps[i], x=xvals, y=yvals, zmin=0, zmax=len(sp)-1,
@@ -920,128 +887,319 @@ def diagram_interactive(data, title=None, borders=0, names=None,
     -------
     An interactive plot.
     """
+
+    with conversion.localconverter(default_converter):
+        basis_sp = list(ro.conversion.rpy2py(data.rx2("basis")).rownames)
+        xyvars = list(ro.conversion.rpy2py(data.rx2("vars")))
+        xyvals = list(ro.conversion.rpy2py(data.rx2("vals")))
     
-    basis_sp = list(ro.conversion.rpy2py(data.rx2("basis")).index)
-
-    xyvars = list(ro.conversion.rpy2py(data.rx2("vars")))
-    xyvals = list(ro.conversion.rpy2py(data.rx2("vals")))
-
-    if 'loga.equil' not in data.names:
-        calc_type = "a"
-    else:
-        calc_type = "e"
-
-    data = equilibrate(data, balance=balance, messages=messages)
-
-    if calc_type=="a":
-        out_vals = data.rx2("values")
-        out_units = "A/(2.303RT)"
+        if 'loga.equil' not in data.names:
+            calc_type = "a"
+        else:
+            calc_type = "e"
+            
+        try:
+            balance = float(balance)
+        except:
+            pass
+        
+        if balance is None or balance == "":
+            a, args = diagram(data, messages=False, plot_it=False)
+            balance = list(a.rx2("n.balance"))
+                
+        if calc_type=="a":
+            # handling output of affinity()
+            out_vals = data.rx2["values"]
+            out_units = "A/(2.303RT)"
+        else:
+            # handling output of equilibrate()
+            out_vals = data.rx2("loga.equil")
+            out_units = "log a"
         
         nsp = len(out_vals)
-        lsp = out_vals[0].size
-        
-        flat_out_vals = np.concatenate(tuple(arr.transpose() for arr in out_vals), axis=0).reshape(nsp, lsp).tolist()
-        df = pd.DataFrame(flat_out_vals)
-        df["n.balance"] = list(data.rx2("n.balance"))
-        
-        # divide values by balance
-        df = df.apply(lambda row: row/row["n.balance"], axis=1)
-        df = df.drop(["n.balance"], axis=1)
-        sp = list(info([int(val) for val in list(out_vals.names)], messages=False)["name"])
-        
-    elif calc_type=="e":
-        out_vals = data.rx2("loga.equil")
-        out_units = "log a"
 
-        nsp = len(out_vals)
-        lsp = out_vals[0].size
-        
-        flat_out_vals = np.concatenate(tuple(arr.transpose() for arr in out_vals), axis=0).reshape(nsp, lsp).tolist()
-        
-        df = pd.DataFrame(flat_out_vals)
-        sp = list(info([int(val) for val in list(data.rx2("values").names)], messages=False)["name"])
-        
-    if isinstance(names, list) and len(names)==len(sp):
-        sp = names
-    
-    df.index = sp
-    df = df.transpose()
+        if isinstance(out_vals[0], rpy2.robjects.vectors.FloatMatrix):
+            # if there are two variables in affinity (predominance plot), data.rx2["values"][0] will
+            # return a rpy2.robjects.vectors.FloatMatrix representing all species.
+            # Turn this floatmatrix into a list of lists, then turn into a dataframe.
+            lsp = out_vals[0].nrow*out_vals[0].ncol
+            flat_out_vals = np.concatenate(tuple(arr.transpose() for arr in out_vals), axis=0).reshape(nsp, lsp).tolist()
+            df = pd.DataFrame(flat_out_vals)
+        elif isinstance(out_vals[0], rpy2.robjects.vectors.FloatArray):
+            # if there is only a single variable in affinity (activity plot), data.rx2["values"][0] will
+            # return a rpy2.robjects.vectors.FloatArray representing only the first species,
+            # so loop through all species to create a list of lists, then turn into a dataframe.
+            flat_out_vals = []
+            for v in out_vals:
+                flat_out_vals.append(v)
+            df = pd.DataFrame(flat_out_vals)
 
-    if alpha and len(xyvars) == 1:
-        df = df.map(lambda x: 10**x)
-        df = df[sp].div(df[sp].sum(axis=1), axis=0)
-        
-    xvar = xyvars[0]
-    xvals = [float(val) for val in xyvals[0]]
-
-    if len(xyvars) == 1:
-        df[xvar] = xvals
-        if not isinstance(ylab, str):
-            if alpha:
-                ylab = "alpha"
+        if calc_type=="a":
+            # handling output of affinity()
+            if isinstance(balance, str):
+                df["n.balance"] = list(species().rx2(balance))
             else:
-                ylab = out_units
-            ylab = html_chemname_format(ylab)
-        df = pd.melt(df, id_vars=xyvars, value_vars=sp)
+                df["n.balance"] = balance
+            # divide values by balance
+            df = df.apply(lambda row: row/row["n.balance"], axis=1)
+            df = df.drop(["n.balance"], axis=1)
 
-    elif len(xyvars)==2:
-        # predominance plot
-        yvar = xyvars[1]
-        yvals = [float(val) for val in xyvals[1]]
-        df["pred"] = df.idxmax(axis=1)
-        df["prednames"] = df["pred"]
-
-        xvals_full = xvals*len(yvals)
+            sp = list(info([int(val) for val in list(out_vals.names)], messages=False).rx2("name"))
+        else:
+            # handling output of equilibrate()
+            sp = list(info([int(val) for val in list(data.rx2("values").names)], messages=False).rx2("name"))
+            
+        if isinstance(names, list) and len(names)==len(sp):
+            sp = names
         
-        yvals_full = __flatten_list([[y]*len(xvals) for y in yvals])
-        df[xvar] = xvals_full
-        df[yvar] = yvals_full
-
-    unit_dict = {"P":"bar", "T":"°C", "pH":"", "Eh":"volts", "IS":"mol/kg"}
-
-    for s in basis_sp:
-        unit_dict[s] = "logact "+s
+        df.index = sp
+        df = df.transpose()
     
-    if not isinstance(xlab, str):
-        xlab = xvar+", "+unit_dict[xvar]
-        if xvar == "pH":
-            xlab = "pH"
-        if xvar in basis_sp:
-            xlab = unit_dict[xvar]
-        xlab = html_chemname_format(xlab)
+        if alpha and len(xyvars) == 1:
+            df = df.map(lambda x: 10**x)
+            df = df[sp].div(df[sp].sum(axis=1), axis=0)
+            
+        xvar = xyvars[0]
+        xvals = [float(val) for val in xyvals[0]]
+    
+        if len(xyvars) == 1:
+            df[xvar] = xvals
+            if not isinstance(ylab, str):
+                if alpha:
+                    ylab = "alpha"
+                else:
+                    ylab = out_units
+                ylab = chemlabel(ylab)
+            df = pd.melt(df, id_vars=xyvars, value_vars=sp)
+    
+        elif len(xyvars)==2:
+            # predominance plot
+            yvar = xyvars[1]
+            yvals = [float(val) for val in xyvals[1]]
 
-    if len(xyvars) == 1:
+            df["pred"] = df.idxmax(axis=1,skipna=True)
+            df["prednames"] = df["pred"]
+    
+            xvals_full = xvals*len(yvals)
+            
+            yvals_full = __flatten_list([[y]*len(xvals) for y in yvals])
+            df[xvar] = xvals_full
+            df[yvar] = yvals_full
+    
+        unit_dict = {"P":"bar", "T":"°C", "pH":"", "Eh":"volts", "IS":"mol/kg"}
+    
+        for s in basis_sp:
+            unit_dict[s] = "logact "+s
         
-        df["variable"] = df["variable"].apply(html_chemname_format)
+        if not isinstance(xlab, str):
+            xlab = xvar+", "+unit_dict[xvar]
+            if xvar == "pH":
+                xlab = "pH"
+            if xvar in basis_sp:
+                xlab = unit_dict[xvar]
+            xlab = chemlabel(xlab)
+    
+        if len(xyvars) == 1:
+            
+            df["variable"] = df["variable"].apply(chemlabel)
+            
+            fig = px.line(df, x=xvar, y="value", color='variable', template="simple_white",
+                          width=width,  height=height,
+                          labels=dict(value=ylab, x=xlab), render_mode='svg',
+                         )
+            
+            fig.update_layout(xaxis_title=xlab,
+                              yaxis_title=ylab,
+                              legend_title=None)
+            
+            if isinstance(title, str):
+                fig.update_layout(title={'text':title, 'x':0.5, 'xanchor':'center'})
+    
+            if isinstance(annotation, str):
+                fig.add_annotation(
+                    x=annotation_coords[0],
+                    y=annotation_coords[1],
+                    text=annotation,
+                    showarrow=False,
+                    xref="paper",
+                    yref="paper",
+                    align='left',
+                    bgcolor="rgba(255, 255, 255, 0.5)")
+    
+            save_as, save_format = __save_figure(fig, save_as, save_format, save_scale,
+                                                 plot_width=width, plot_height=height, ppi=1)
         
-        fig = px.line(df, x=xvar, y="value", color='variable', template="simple_white",
-                      width=width,  height=height,
-                      labels=dict(value=ylab, x=xlab), render_mode='svg',
-                     )
-        
-        fig.update_layout(xaxis_title=xlab,
-                          yaxis_title=ylab,
-                          legend_title=None)
-        
-        if isinstance(title, str):
-            fig.update_layout(title={'text':title, 'x':0.5, 'xanchor':'center'})
-
-        if isinstance(annotation, str):
-            fig.add_annotation(
-                x=annotation_coords[0],
-                y=annotation_coords[1],
-                text=annotation,
-                showarrow=False,
-                xref="paper",
-                yref="paper",
-                align='left',
-                bgcolor="rgba(255, 255, 255, 0.5)")
-
+            config = {'displaylogo': False,
+                      'modeBarButtonsToRemove': ['resetScale2d', 'toggleSpikelines'],
+                      'toImageButtonOptions': {
+                                                 'format': save_format, # one of png, svg, jpeg, webp
+                                                 'filename': save_as,
+                                                 'height': height,
+                                                 'width': width,
+                                                 'scale': save_scale,
+                                              },
+                     }
+    
+        if len(xyvars) == 2:
+            mappings = {'pred': {s:lab for s,lab in zip(sp,range(0,len(sp)))}}
+            df.replace(mappings, inplace=True)
+    
+            data = np.array(df.pred)
+            shape = (len(xvals), len(yvals))
+            dmap = data.reshape(shape)
+    
+            data = np.array(df.prednames)
+            shape = (len(xvals), len(yvals))
+            dmap_names = data.reshape(shape)
+            
+            if not isinstance(ylab, str):
+                ylab = yvar+", "+unit_dict[yvar]
+                if yvar in basis_sp:
+                    ylab = unit_dict[yvar]
+    
+                if yvar == "pH":
+                    ylab = "pH"
+                ylab = chemlabel(ylab)
+            
+            fig = px.imshow(dmap, width=width, height=height, aspect="auto",
+                            labels=dict(x=xlab, y=ylab, color="region"),
+                            x=xvals, y=yvals, template="simple_white",
+                           )
+    
+            fig.update(data=[{'customdata': dmap_names,
+                'hovertemplate': xlab+': %{x}<br>'+ylab+': %{y}<br>Region: %{customdata}<extra></extra>'}])
+    
+            if colormap == 'none':
+                colormap = [[0, 'white'], [1, 'white']]
+            
+            fig.update_traces(dict(showscale=False, 
+                                   coloraxis=None, 
+                                   colorscale=colormap),
+                              selector={'type':'heatmap'})
+    
+            fig.update_yaxes(autorange=True)
+            
+            if isinstance(title, str):
+                fig.update_layout(title={'text':title, 'x':0.5, 'xanchor':'center'})
+    
+            for s in sp:
+                if s in set(df["prednames"]):
+                    df_s = df.loc[df["prednames"]==s,]
+                    namex = df_s[xvar].mean()
+                    namey = df_s[yvar].mean()
+                    fig.add_annotation(x=namex, y=namey,
+                                       text=chemlabel(s),
+                                       bgcolor="rgba(255, 255, 255, 0.5)",
+                                       showarrow=False)
+    
+            if isinstance(annotation, str):
+                fig.add_annotation(
+                    x=annotation_coords[0],
+                    y=annotation_coords[1],
+                    text=annotation,
+                    showarrow=False,
+                    xref="paper",
+                    yref="paper",
+                    align='left',
+                    bgcolor="rgba(255, 255, 255, 0.5)")
+            
+            if borders > 0:
+                
+                unique_x_vals = list(dict.fromkeys(df[xvar]))
+                unique_y_vals = list(dict.fromkeys(df[yvar]))
+                
+                def mov_mean(numbers=[], window_size=2):
+                    i = 0
+                    moving_averages = []
+                    while i < len(numbers) - window_size + 1:
+                        this_window = numbers[i : i + window_size]
+    
+                        window_average = sum(this_window) / window_size
+                        moving_averages.append(window_average)
+                        i += 1
+                    return moving_averages
+                
+                x_mov_mean = mov_mean(unique_x_vals)
+                y_mov_mean = mov_mean(unique_y_vals)
+    
+                x_plot_min = x_mov_mean[0] - (x_mov_mean[1] - x_mov_mean[0])
+                y_plot_min = y_mov_mean[0] - (y_mov_mean[1] - y_mov_mean[0])
+    
+                x_plot_max = x_mov_mean[-1] + (x_mov_mean[1] - x_mov_mean[0])
+                y_plot_max = y_mov_mean[-1] + (y_mov_mean[1] - y_mov_mean[0])
+    
+                x_vals_border = [x_plot_min] + x_mov_mean + [x_plot_max]
+                y_vals_border = [y_plot_min] + y_mov_mean + [y_plot_max]
+                
+                data = np.array(df.pred)
+                shape = (len(xvals), len(yvals))
+                dmap = data.reshape(shape)
+                
+                def find_line(dmap, row_index):
+                    return [i for i in range(0, len(dmap[row_index])-1) if dmap[row_index][i] != dmap[row_index][i+1]]
+    
+                nrows, ncols = dmap.shape
+                vlines = []
+                for row_i in range(0, nrows):
+                    vlines.append(find_line(dmap, row_i))
+    
+                dmap_transposed = dmap.transpose()
+                nrows, ncols = dmap_transposed.shape
+                hlines = []
+                for row_i in range(0, nrows):
+                    hlines.append(find_line(dmap_transposed, row_i))
+                y_coord_list_vertical = []
+                x_coord_list_vertical = []
+                for i,row in enumerate(vlines):
+                    for line in row:
+                        x_coord_list_vertical += [x_vals_border[line+1], x_vals_border[line+1], np.nan]
+                        y_coord_list_vertical += [y_vals_border[i], y_vals_border[i+1], np.nan]
+    
+                y_coord_list_horizontal = []
+                x_coord_list_horizontal = []
+                for i,col in enumerate(hlines):
+                    for line in col:
+                        y_coord_list_horizontal += [y_vals_border[line+1], y_vals_border[line+1], np.nan]
+                        x_coord_list_horizontal += [x_vals_border[i], x_vals_border[i+1], np.nan]
+                        
+                fig.add_trace(
+                    go.Scatter(
+                  mode= 'lines',
+                  x= x_coord_list_horizontal,
+                  y= y_coord_list_horizontal,
+                  line= {
+                    "width": borders,
+                    "color": 'black'
+                  },
+                  hoverinfo= 'skip',
+                  showlegend=False,
+                    )
+                )
+                fig.add_trace(
+                    go.Scatter(
+                  mode= 'lines',
+                  x= x_coord_list_vertical,
+                  y= y_coord_list_vertical,
+                  line= {
+                    "width": borders,
+                    "color": 'black'
+                  },
+                  hoverinfo= 'skip',
+                  showlegend=False,
+                    )
+                )
+            
+                fig.update_yaxes(range=[min(yvals), max(yvals)], autorange=False, mirror=True)
+                fig.update_xaxes(range=[min(xvals), max(xvals)], autorange=False, mirror=True)
+            
+            
         save_as, save_format = __save_figure(fig, save_as, save_format, save_scale,
                                              plot_width=width, plot_height=height, ppi=1)
     
         config = {'displaylogo': False,
-                  'modeBarButtonsToRemove': ['resetScale2d', 'toggleSpikelines'],
+                  'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'zoomIn2d', 'zoomOut2d',
+                                             'autoScale2d', 'resetScale2d', 'toggleSpikelines',
+                                             'hoverClosestCartesian', 'hoverCompareCartesian'],
                   'toImageButtonOptions': {
                                              'format': save_format, # one of png, svg, jpeg, webp
                                              'filename': save_as,
@@ -1050,180 +1208,11 @@ def diagram_interactive(data, title=None, borders=0, names=None,
                                              'scale': save_scale,
                                           },
                  }
-
-    if len(xyvars) == 2:
-        mappings = {'pred': {s:lab for s,lab in zip(sp,range(0,len(sp)))}}
-        df.replace(mappings, inplace=True)
-
-        data = np.array(df.pred)
-        shape = (len(xvals), len(yvals))
-        dmap = data.reshape(shape)
-
-        data = np.array(df.prednames)
-        shape = (len(xvals), len(yvals))
-        dmap_names = data.reshape(shape)
-        
-        if not isinstance(ylab, str):
-            ylab = yvar+", "+unit_dict[yvar]
-            if yvar in basis_sp:
-                ylab = unit_dict[yvar]
-
-            if yvar == "pH":
-                ylab = "pH"
-            ylab = html_chemname_format(ylab)
-        
-        fig = px.imshow(dmap, width=width, height=height, aspect="auto",
-                        labels=dict(x=xlab, y=ylab, color="region"),
-                        x=xvals, y=yvals, template="simple_white",
-                       )
-
-        fig.update(data=[{'customdata': dmap_names,
-            'hovertemplate': xlab+': %{x}<br>'+ylab+': %{y}<br>Region: %{customdata}<extra></extra>'}])
-
-        if colormap == 'none':
-            colormap = [[0, 'white'], [1, 'white']]
-        
-        fig.update_traces(dict(showscale=False, 
-                               coloraxis=None, 
-                               colorscale=colormap),
-                          selector={'type':'heatmap'})
-
-        fig.update_yaxes(autorange=True)
-        
-        if isinstance(title, str):
-            fig.update_layout(title={'text':title, 'x':0.5, 'xanchor':'center'})
-
-        for s in sp:
-            if s in set(df["prednames"]):
-                df_s = df.loc[df["prednames"]==s,]
-                namex = df_s[xvar].mean()
-                namey = df_s[yvar].mean()
-                fig.add_annotation(x=namex, y=namey,
-                                   text=html_chemname_format(s),
-                                   bgcolor="rgba(255, 255, 255, 0.5)",
-                                   showarrow=False)
-
-        if isinstance(annotation, str):
-            fig.add_annotation(
-                x=annotation_coords[0],
-                y=annotation_coords[1],
-                text=annotation,
-                showarrow=False,
-                xref="paper",
-                yref="paper",
-                align='left',
-                bgcolor="rgba(255, 255, 255, 0.5)")
-        
-        if borders > 0:
             
-            unique_x_vals = list(dict.fromkeys(df[xvar]))
-            unique_y_vals = list(dict.fromkeys(df[yvar]))
-            
-            def mov_mean(numbers=[], window_size=2):
-                i = 0
-                moving_averages = []
-                while i < len(numbers) - window_size + 1:
-                    this_window = numbers[i : i + window_size]
-
-                    window_average = sum(this_window) / window_size
-                    moving_averages.append(window_average)
-                    i += 1
-                return moving_averages
-            
-            x_mov_mean = mov_mean(unique_x_vals)
-            y_mov_mean = mov_mean(unique_y_vals)
-
-            x_plot_min = x_mov_mean[0] - (x_mov_mean[1] - x_mov_mean[0])
-            y_plot_min = y_mov_mean[0] - (y_mov_mean[1] - y_mov_mean[0])
-
-            x_plot_max = x_mov_mean[-1] + (x_mov_mean[1] - x_mov_mean[0])
-            y_plot_max = y_mov_mean[-1] + (y_mov_mean[1] - y_mov_mean[0])
-
-            x_vals_border = [x_plot_min] + x_mov_mean + [x_plot_max]
-            y_vals_border = [y_plot_min] + y_mov_mean + [y_plot_max]
-            
-            data = np.array(df.pred)
-            shape = (len(xvals), len(yvals))
-            dmap = data.reshape(shape)
-            
-            def find_line(dmap, row_index):
-                return [i for i in range(0, len(dmap[row_index])-1) if dmap[row_index][i] != dmap[row_index][i+1]]
-
-            nrows, ncols = dmap.shape
-            vlines = []
-            for row_i in range(0, nrows):
-                vlines.append(find_line(dmap, row_i))
-
-            dmap_transposed = dmap.transpose()
-            nrows, ncols = dmap_transposed.shape
-            hlines = []
-            for row_i in range(0, nrows):
-                hlines.append(find_line(dmap_transposed, row_i))
-            y_coord_list_vertical = []
-            x_coord_list_vertical = []
-            for i,row in enumerate(vlines):
-                for line in row:
-                    x_coord_list_vertical += [x_vals_border[line+1], x_vals_border[line+1], np.nan]
-                    y_coord_list_vertical += [y_vals_border[i], y_vals_border[i+1], np.nan]
-
-            y_coord_list_horizontal = []
-            x_coord_list_horizontal = []
-            for i,col in enumerate(hlines):
-                for line in col:
-                    y_coord_list_horizontal += [y_vals_border[line+1], y_vals_border[line+1], np.nan]
-                    x_coord_list_horizontal += [x_vals_border[i], x_vals_border[i+1], np.nan]
-                    
-            fig.add_trace(
-                go.Scatter(
-              mode= 'lines',
-              x= x_coord_list_horizontal,
-              y= y_coord_list_horizontal,
-              line= {
-                "width": borders,
-                "color": 'black'
-              },
-              hoverinfo= 'skip',
-              showlegend=False,
-                )
-            )
-            fig.add_trace(
-                go.Scatter(
-              mode= 'lines',
-              x= x_coord_list_vertical,
-              y= y_coord_list_vertical,
-              line= {
-                "width": borders,
-                "color": 'black'
-              },
-              hoverinfo= 'skip',
-              showlegend=False,
-                )
-            )
+        if plot_it:
+            fig.show(config=config)
         
-            fig.update_yaxes(range=[min(yvals), max(yvals)], autorange=False, mirror=True)
-            fig.update_xaxes(range=[min(xvals), max(xvals)], autorange=False, mirror=True)
-        
-        
-    save_as, save_format = __save_figure(fig, save_as, save_format, save_scale,
-                                         plot_width=width, plot_height=height, ppi=1)
-
-    config = {'displaylogo': False,
-              'modeBarButtonsToRemove': ['zoom2d', 'pan2d', 'zoomIn2d', 'zoomOut2d',
-                                         'autoScale2d', 'resetScale2d', 'toggleSpikelines',
-                                         'hoverClosestCartesian', 'hoverCompareCartesian'],
-              'toImageButtonOptions': {
-                                         'format': save_format, # one of png, svg, jpeg, webp
-                                         'filename': save_as,
-                                         'height': height,
-                                         'width': width,
-                                         'scale': save_scale,
-                                      },
-             }
-        
-    if plot_it:
-        fig.show(config=config)
-    
-    return df, fig
+        return df, fig
 
 
 def _convert_to_RVector(value, force_Rvec=True):
@@ -1582,7 +1571,7 @@ def add_protein(aa, messages=True):
 
 
 def equilibrate(aout, balance=None, loga_balance=None, ispecies=None,
-                normalize=False, messages=True):
+                normalize=False, messages=True, dash=False):
     
     """
     Python wrapper for the equilibrate() function in CHNOSZ.
@@ -1608,6 +1597,10 @@ def equilibrate(aout, balance=None, loga_balance=None, ispecies=None,
     
     messages : bool, default True
         Display messages from CHNOSZ?
+
+    dash : bool, default False
+        Is this function being used in a Dash web application? Required for rpy2
+        package compatibility.
     
     Returns
     -------
@@ -1625,9 +1618,13 @@ def equilibrate(aout, balance=None, loga_balance=None, ispecies=None,
 
     capture = R_output()
     capture.capture_r_output()
-        
-    eout = CHNOSZ.equilibrate(**args)
 
+    if dash:
+        with conversion.localconverter(default_converter):
+            eout = CHNOSZ.equilibrate(**args)
+    else:
+        eout = CHNOSZ.equilibrate(**args)
+        
     if messages:
         for line in capture.stderr: print(line)
     
@@ -1950,7 +1947,7 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
 def affinity(property=None, sout=None, exceed_Ttr=False,
              exceed_rhomin=False, return_buffer=False, return_sout=False,
              balance="PBB", iprotein=None, loga_protein=-3, transect=None,
-             messages=True, **kwargs):
+             messages=True, dash=False, **kwargs):
 
     """
     Python wrapper for the affinity() function in CHNOSZ.
@@ -1998,6 +1995,10 @@ def affinity(property=None, sout=None, exceed_Ttr=False,
     
     messages : bool, default True
         Display messages from CHNOSZ?
+
+    dash : bool, default False
+        Is this function being used in a Dash web application? Required for
+        rpy2 compatibility.
         
     **kwargs : numeric, zero or more named arguments
         Used to identify the variables of interest in the calculations. E.g.,
@@ -2025,8 +2026,12 @@ def affinity(property=None, sout=None, exceed_Ttr=False,
         
     capture = R_output()
     capture.capture_r_output()
-    
-    a = CHNOSZ.affinity(**args)
+
+    if dash:
+        with conversion.localconverter(default_converter):
+            a = CHNOSZ.affinity(**args)
+    else:
+        a = CHNOSZ.affinity(**args)
 
     if messages:
         for line in capture.stderr: print(line)
@@ -2035,7 +2040,7 @@ def affinity(property=None, sout=None, exceed_Ttr=False,
 
             
 def species(species=None, state=None, delete=False, add=False,
-            index_return=False, messages=True):
+            index_return=False, messages=True, dash=False):
     
     """
     Python wrapper for the species() function in CHNOSZ.
@@ -2064,6 +2069,10 @@ def species(species=None, state=None, delete=False, add=False,
     
     messages : bool, default True
         Display messages from CHNOSZ?
+
+    dash : bool, default False
+        Is this function being used in a Dash web application? Required for rpy2
+        compatibility.
         
     Returns
     ----------
@@ -2086,16 +2095,23 @@ def species(species=None, state=None, delete=False, add=False,
     
     capture = R_output()
     capture.capture_r_output()
-    
-    sout = CHNOSZ.species(**args)
+
+    if dash:
+        with conversion.localconverter(default_converter):
+            sout = CHNOSZ.species(**args)
+            sout = ro.conversion.rpy2py(sout)
+    else:
+        sout = CHNOSZ.species(**args)
+        sout = ro.conversion.rpy2py(sout)
         
     if messages:
         for line in capture.stderr: print(line)
     
-    return ro.conversion.rpy2py(sout)
+    return sout
 
 
-def basis(species=None, state=None, logact=None, delete=False, messages=True):
+def basis(species=None, state=None, logact=None, delete=False,
+          messages=True, dash=False):
     
     """
     Python wrapper for the basis() function in CHNOSZ.
@@ -2117,6 +2133,10 @@ def basis(species=None, state=None, logact=None, delete=False, messages=True):
 
     messages : bool, default True
         Display messages from CHNOSZ?
+
+    dash : bool, default False
+        Is this function being used in a Dash web application? Required for rpy2
+        compatibility.
         
     Returns
     ----------
@@ -2139,13 +2159,19 @@ def basis(species=None, state=None, logact=None, delete=False, messages=True):
     
     capture = R_output()
     capture.capture_r_output()
-    
-    bout = CHNOSZ.basis(**args)
+
+    if dash:
+        with conversion.localconverter(default_converter):
+            bout = CHNOSZ.basis(**args)
+            bout = ro.conversion.rpy2py(bout)
+    else:
+        bout = CHNOSZ.basis(**args)
+        bout = ro.conversion.rpy2py(bout)
         
     if messages:
         for line in capture.stderr: print(line)
     
-    return ro.conversion.rpy2py(bout)
+    return bout
 
 
 def reset(db="OBIGT", messages=True):
@@ -3013,8 +3039,8 @@ def univariant_TP(logK, species, coeff, state, Trange, Prange, IS=0,
         react_grid = output[0]["reaction"]
         react_grid["name"] = [name  if name != "water" else "H2O" for name in react_grid["name"]] # replace any "water" with "H2O" in the written reaction
         
-        reactants = " + ".join([(str(-int(react_grid["coeff"].iloc[i]) if isinstance(react_grid["coeff"].iloc[i], (int, np.integer)) else -react_grid["coeff"].iloc[i])+" " if -react_grid["coeff"].iloc[i] != 1 else "") + html_chemname_format(react_grid["name"].iloc[i]) for i in range(0, len(react_grid["name"])) if react_grid["coeff"].iloc[i] < 0])
-        products = " + ".join([(str(int(react_grid["coeff"].iloc[i]) if isinstance(react_grid["coeff"].iloc[i], (int, np.integer)) else react_grid["coeff"].iloc[i])+" " if react_grid["coeff"].iloc[i] != 1 else "") + html_chemname_format(react_grid["name"].iloc[i]) for i in range(0, len(react_grid["name"])) if react_grid["coeff"].iloc[i] > 0])
+        reactants = " + ".join([(str(-int(react_grid["coeff"].iloc[i]) if isinstance(react_grid["coeff"].iloc[i], (int, np.integer)) else -react_grid["coeff"].iloc[i])+" " if -react_grid["coeff"].iloc[i] != 1 else "") + chemlabel(react_grid["name"].iloc[i]) for i in range(0, len(react_grid["name"])) if react_grid["coeff"].iloc[i] < 0])
+        products = " + ".join([(str(int(react_grid["coeff"].iloc[i]) if isinstance(react_grid["coeff"].iloc[i], (int, np.integer)) else react_grid["coeff"].iloc[i])+" " if react_grid["coeff"].iloc[i] != 1 else "") + chemlabel(react_grid["name"].iloc[i]) for i in range(0, len(react_grid["name"])) if react_grid["coeff"].iloc[i] > 0])
         
         title = reactants + " = " + products
     
@@ -3071,7 +3097,7 @@ def syslab(system=["K2O", "Al2O3", "SiO2", "H2O"], dash="-"):
     A formatted string representing the thermodynamic system.
     """
     
-    return dash.join([html_chemname_format(sp)for sp in system])
+    return dash.join([chemlabel(sp)for sp in system])
 
 
 def ratlab(top="K+", bottom="H+", molality=False):
@@ -3134,4 +3160,4 @@ def ratlab(top="K+", bottom="H+", molality=False):
     else:
         sym = "a"
         
-    return "log("+sym+bottom_charge+"<sub>"+html_chemname_format(top)+"</sub>/"+sym+top_charge+"<sub>"+html_chemname_format(bottom)+"</sub>)"
+    return "log("+sym+bottom_charge+"<sub>"+chemlabel(top)+"</sub>/"+sym+top_charge+"<sub>"+chemlabel(bottom)+"</sub>)"
