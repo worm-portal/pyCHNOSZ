@@ -16,12 +16,9 @@ import copy
 
 from urllib.request import urlopen
 from io import StringIO
-import requests
 import time
 
 import rpy2.rinterface_lib.callbacks
-import logging
-rpy2.rinterface_lib.callbacks.logger.setLevel(logging.ERROR)   # will display errors, but not warnings
 
 import rpy2.robjects as ro
 from rpy2.robjects import conversion, default_converter # necessary to get rpy2 working in dash apps
@@ -29,7 +26,7 @@ from rpy2.robjects.packages import importr
 from rpy2.robjects import pandas2ri
 from rpy2.robjects.lib import grdevices
 
-from WORMutils import chemlabel
+from WORMutils import chemlabel, R_output, can_connect_to
 
 pandas2ri.activate()
 
@@ -38,18 +35,6 @@ grdev = importr('grDevices')
 
 NumberTypes = (int, float, complex)
 
-def _can_connect_to(url) -> bool:  # `bool` is a type hint for the return type of the function
-    try:
-        response = requests.get(url)
-    except requests.ConnectionError:
-        return False  # can NOT connect
-    else:
-        if response.status_code == 200:
-            return True  # can connect
-        else:
-            print("Unanticipated error code when attempting to reach WORM database:", response.status_code)
-            return False
-            
 
 @contextmanager
 def __r_inline_plot(width=600, height=520, dpi=150, plot_it=True):
@@ -81,30 +66,6 @@ def __r_inline_plot(width=600, height=520, dpi=150, plot_it=True):
         display(Image(data=data, format='png', embed=True))
 
 
-class R_output(object):
-    
-    def capture_r_output(self):
-        """
-        Capture and create a list of R console messages
-        """
-        
-        # Record output #
-        self.stdout = []
-        self.stderr = []
-        
-        # Dummy functions #
-        def add_to_stdout(line): self.stdout.append(line)
-        def add_to_stderr(line): self.stderr.append(line)
-            
-        # Keep the old functions #
-        self.stdout_orig = rpy2.rinterface_lib.callbacks.consolewrite_print
-        self.stderr_orig = rpy2.rinterface_lib.callbacks.consolewrite_warnerror
-        
-        # Set the call backs #
-        rpy2.rinterface_lib.callbacks.consolewrite_print     = add_to_stdout
-        rpy2.rinterface_lib.callbacks.consolewrite_warnerror = add_to_stderr
-
-    
 def __flatten_list(_2d_list):
     flat_list = []
     # Iterate through the outer list
@@ -231,7 +192,7 @@ def solubility(iaq=None, in_terms_of=None, dissociate=False, find_IS=False,
     s = CHNOSZ.solubility(**args)
 
     if messages:
-        for line in capture.stderr: print(line)
+        capture.print_captured_r_output()
 
     return s
     
@@ -333,7 +294,7 @@ def retrieve(elements=None, ligands=None, state=None, T=None, P="Psat",
     out = CHNOSZ.retrieve(**args)
 
     if messages:
-        for line in capture.stderr: print(line)
+        capture.print_captured_r_output()
 
     out = list(out)
     
@@ -1304,7 +1265,7 @@ def water(property=None, T=298.15, P="Psat", P1=True, messages=True):
     out = CHNOSZ.water(**args)
 
     if messages:
-        for line in capture.stderr: print(line)
+        capture.print_captured_r_output()
     
     if property not in ["SUPCRT92", "SUPCRT", "IAPWS95", "IAPWS", "DEW"]:
 
@@ -1341,7 +1302,7 @@ def entropy(formula, messages=True):
     out = CHNOSZ.entropy(formula_R)
 
     if messages:
-        for line in capture.stderr: print(line)
+        capture.print_captured_r_output()
     
     out = list(out)
     if not isinstance(formula, list):
@@ -1380,7 +1341,7 @@ def mass(formula, messages=True):
     out = CHNOSZ.mass(formula_R)
 
     if messages:
-        for line in capture.stderr: print(line)
+        capture.print_captured_r_output()
     
     out = list(out)
     if not isinstance(formula, list):
@@ -1418,7 +1379,7 @@ def zc(formula, messages=True):
     out = CHNOSZ.ZC(formula_R)
 
     if messages:
-        for line in capture.stderr: print(line)
+        capture.print_captured_r_output()
     
     out = list(out)
     if not isinstance(formula, list):
@@ -1473,7 +1434,7 @@ def makeup(formula, multiplier=1, sum=False, count_zero=False, messages=True):
     return out
     
     if messages:
-        for line in capture.stderr: print(line)
+        capture.print_captured_r_output()
     
     if isinstance(out, ro.ListVector):
         out_dict = {}
@@ -1532,7 +1493,7 @@ def seq2aa(protein, sequence, messages=True):
     pout = CHNOSZ.seq2aa(**args)
 
     if messages:
-        for line in capture.stderr: print(line)
+        capture.print_captured_r_output()
     
     return ro.conversion.rpy2py(pout)
 
@@ -1565,7 +1526,7 @@ def add_protein(aa, messages=True):
     apout = CHNOSZ.add_protein(**args)
 
     if messages:
-        for line in capture.stderr: print(line)
+        capture.print_captured_r_output()
     
     return list(apout)
 
@@ -1626,7 +1587,7 @@ def equilibrate(aout, balance=None, loga_balance=None, ispecies=None,
         eout = CHNOSZ.equilibrate(**args)
         
     if messages:
-        for line in capture.stderr: print(line)
+        capture.print_captured_r_output()
     
     return eout
 
@@ -1939,7 +1900,7 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
             a = CHNOSZ.diagram(**args)
             
     if messages:
-        for line in capture.stderr: print(line)
+        capture.print_captured_r_output()
     
     return a, args
 
@@ -2034,7 +1995,7 @@ def affinity(property=None, sout=None, exceed_Ttr=False,
         a = CHNOSZ.affinity(**args)
 
     if messages:
-        for line in capture.stderr: print(line)
+        capture.print_captured_r_output()
 
     return a
 
@@ -2105,7 +2066,7 @@ def species(species=None, state=None, delete=False, add=False,
         sout = ro.conversion.rpy2py(sout)
         
     if messages:
-        for line in capture.stderr: print(line)
+        capture.print_captured_r_output()
     
     return sout
 
@@ -2169,7 +2130,7 @@ def basis(species=None, state=None, logact=None, delete=False,
         bout = ro.conversion.rpy2py(bout)
         
     if messages:
-        for line in capture.stderr: print(line)
+        capture.print_captured_r_output()
     
     return bout
 
@@ -2200,7 +2161,7 @@ def reset(db="OBIGT", messages=True):
         url = "https://raw.githubusercontent.com/worm-portal/WORM-db/master/wrm_data.csv"
 
         # Load WORM database by detault
-        if _can_connect_to(url):
+        if can_connect_to(url):
             # Download from URL and decode as UTF-8 text.
             with urlopen(url) as webpage:
                 content = webpage.read().decode()
@@ -2226,7 +2187,7 @@ def reset(db="OBIGT", messages=True):
         CHNOSZ.reset()
 
         if messages:
-            for line in capture.stderr: print(line)
+            capture.print_captured_r_output()
 
 
 def add_OBIGT(file, species=None, force=True, messages=True):
@@ -2280,7 +2241,7 @@ def add_OBIGT(file, species=None, force=True, messages=True):
             ispecies = CHNOSZ.add_OBIGT(**args)
 
             if messages:
-                for line in capture.stderr: print(line)
+                capture.print_captured_r_output()
 
             return list(ispecies)
         
@@ -2385,7 +2346,7 @@ def mod_OBIGT(*args, messages=True, **kwargs):
     ispecies = CHNOSZ.mod_OBIGT(*args, **kwargs)
     
     if messages:
-        for line in capture.stderr: print(line)
+        capture.print_captured_r_output()
     
     return list(ispecies)
     
@@ -2439,7 +2400,7 @@ def info(species, state=None, check_it=True, messages=True):
     a = CHNOSZ.info(**args)
     
     if messages:
-        for line in capture.stderr: print(line)
+        capture.print_captured_r_output()
     
     if output_is_df:
         return ro.conversion.rpy2py(a)
@@ -2556,7 +2517,7 @@ def subcrt(species, coeff=None, state=None,
     a = CHNOSZ.subcrt(**args)
 
     if messages:
-        for line in capture.stderr: print(line)
+        capture.print_captured_r_output()
     
     if "warnings" in a.names:
         warn = a.rx2("warnings")[0] # subcrt's list includes warnings only if they appear
@@ -2716,7 +2677,7 @@ class thermo:
         t = CHNOSZ.thermo(**args)
 
         if messages:
-            for line in capture.stderr: print(line)
+            capture.print_captured_r_output()
         
         for i, name in enumerate(t.names):
             if isinstance(t[i], ro.DataFrame) or isinstance(t[i], ro.Matrix):
@@ -2875,7 +2836,7 @@ def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
                                           minP=minP,
                                           maxP=maxP)
     if messages:
-        for line in capture.stderr: print(line)
+        capture.print_captured_r_output()
 
     if len(a) == 3:
         warn = a[2][0] # subcrt's list includes warnings only if they appear

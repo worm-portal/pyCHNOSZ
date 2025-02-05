@@ -1,5 +1,7 @@
 # pyCHNOSZ
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.11406142.svg)](https://doi.org/10.5281/zenodo.11406142)
+
 Author: Dr. Grayson Boyer, GEOPIG Lab, Arizona State University
 
 [CHNOSZ](https://www.chnosz.net/) is a package written by [Dr. Jeff Dick](https://chnosz.net/jeff/) for performing thermodynamic calculations in aqueous geochemistry and biogeochemistry. pyCHNOSZ is a wrapper for CHNOSZ that allows these calculations to be carried out in Python 3 Jupyter notebooks.
