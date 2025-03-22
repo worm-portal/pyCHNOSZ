@@ -142,6 +142,57 @@ def __seq(start, end, by=None, length_out=None):
     return out
 
 
+def convert(value, units, T=298.15, P=1, pH=7, logaH2O=0, messages=True):
+    """
+    Python wrapper for the convet() function in CHNOSZ.
+    Convert values between units.
+
+    Parameters
+    ----------
+    units : str
+        Name of units to set or convert to/from.
+
+    value : float
+        Value(s) to be converted.
+    
+    T : float, default 298.15
+        Temperature (Kelvin), used in G⁠-⁠logK, pe-Eh⁠ and ⁠logfO2⁠-E0⁠ conversions.
+    
+    P : float, default 1
+        Pressure (bar), used in logfO2⁠-E0⁠ conversions.
+    
+    pH : float, default 7
+        pH, used in logfO2⁠-⁠E0⁠ conversions.
+    
+    logaH2O : float, default 0
+        Logarithm of activity of water, used in ⁠logfO2⁠-E0⁠ conversions
+
+    messages : bool, default True
+        Display messages from CHNOSZ?
+
+    Returns
+    -------
+    
+    """
+
+    if isinstance(value, list):
+        raise Exception("The convert() function in pyCHNOSZ does not currently "
+                "support lists of values, nor the output from solubility().")
+    
+    args = {"value":value, "units":units, "T":T, "P":P, "pH":pH, "logaH2O":logaH2O}
+
+    capture = R_output()
+    capture.capture_r_output()
+
+    out = CHNOSZ.convert(**args)
+
+    if messages:
+        capture.print_captured_r_output()
+
+    return out[0]
+
+
+
 def solubility(iaq=None, in_terms_of=None, dissociate=False, find_IS=False,
                messages=True, **kwargs):
 
@@ -317,7 +368,7 @@ def retrieve(elements=None, ligands=None, state=None, T=None, P="Psat",
     
 def animation(basis_args={}, species_args={}, affinity_args={},
               equilibrate_args=None, diagram_args={},
-              anim_var="T", anim_range=[0, 350, 8],
+              anim_var="T", anim_range=[0, 350, 8], xlab=None, ylab=None,
               save_as="newanimationframe", save_format="png", height=300,
               width=400, save_scale=1,
               messages=False):
@@ -363,6 +414,9 @@ def animation(basis_args={}, species_args={}, affinity_args={},
         The first two numbers in the list are the starting and ending
         values for `anim_var`. The third number in the list is the desired
         number of animation frames.
+
+    xlab, ylab : str, optional
+        Custom names for the X and Y axes.
     
     messages : bool, default True
         Display messages from CHNOSZ?
@@ -397,7 +451,7 @@ def animation(basis_args={}, species_args={}, affinity_args={},
 
     basis_sp = basis_args["species"]
     basis_out = basis(**basis_args)
-
+    
     if isinstance(species_args, dict):
         if "species" not in species_args.keys():
             raise Exception("species_args needs to contain a list of species for 'species'. "
@@ -432,7 +486,6 @@ def animation(basis_args={}, species_args={}, affinity_args={},
             for i in range(0, len(mod_species_logact)) :
                 species_out = species(species_args["species"][i], mod_species_logact[i])
 
-
     sp = list(species_out["name"])
 
     if isinstance(sp[0], (int, np.integer)):
@@ -460,12 +513,13 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     diagram_args["interactive"] = True
     
     for z in zvals:
-        
 
         if anim_var in basis_out.index:
             basis_out = basis(anim_var, z)
         elif anim_var in list(species_out["name"]):
-            species_out = species(anim_var, z)
+            species_out = species(anim_var, -z)
+        elif anim_var == "pH":
+            basis_out = basis("H+", -z)
         else:
             affinity_args[anim_var] = z
         
@@ -532,10 +586,24 @@ def animation(basis_args={}, species_args={}, affinity_args={},
         
         df_c = pd.concat(dfs)
 
-        fig = px.line(df_c, x=xvar, y="value", color='variable', template="simple_white",
-                      width=500,  height=400, animation_frame=anim_var,
-                      labels=dict(value=yvar, x=xvar),
-                     )
+        if "fill" in diagram_args.keys():
+            if isinstance(diagram_args["fill"], list):
+                colormap = {key:col for key,col in zip(list(dict.fromkeys(df_c["variable"])), diagram_args["fill"])}
+            else:
+                colormap = diagram_args["fill"]
+
+            # with color mapping
+            fig = px.line(df_c, x=xvar, y="value", color='variable', template="simple_white",
+                          width=500,  height=400, animation_frame=anim_var,
+                          color_discrete_map = colormap,
+                          labels=dict(value=yvar, x=xvar),
+                         )
+        else:
+            # without color mapping
+            fig = px.line(df_c, x=xvar, y="value", color='variable', template="simple_white",
+                          width=500,  height=400, animation_frame=anim_var,
+                          labels=dict(value=yvar, x=xvar),
+                         )
         
         if "annotation" in diagram_args.keys():
             if "annotation_coords" not in diagram_args.keys():
@@ -551,6 +619,16 @@ def animation(basis_args={}, species_args={}, affinity_args={},
         
         if 'main' in diagram_args.keys():
             fig.update_layout(title={'text':diagram_args["main"], 'x':0.5, 'xanchor':'center'})
+
+        if isinstance(xlab, str):
+            fig.update_layout(xaxis_title=xlab)
+        if isinstance(ylab, str):
+            fig.update_layout(yaxis_title=ylab)
+        
+        if 'fill' in diagram_args.keys():
+            if isinstance(diagram_args["fill"], list):
+                for i,v in enumerate(diagram_args["fill"]):
+                    fig['data'][i]['line']['color']=v
         
         fig.update_layout(legend_title=None)
 
@@ -670,7 +748,7 @@ def animation(basis_args={}, species_args={}, affinity_args={},
                                 hovertemplate=hover_xlab+'<br>'+hover_ylab+'<br>Region: %{customdata}<extra></extra>')
 
         heatmaps.append(heatmaps_i)
-        
+
         frame = go.Frame(data=[heatmaps_i],
                          name=str(i),
                          layout=go.Layout(annotations=annotations_i))
@@ -743,8 +821,20 @@ def animation(basis_args={}, species_args={}, affinity_args={},
 
     )
 
+
+    if 'fill' in diagram_args.keys():
+        if isinstance(diagram_args["fill"], list):
+            colorscale_temp = []
+            for i,v in enumerate(diagram_args["fill"]):
+                colorscale_temp.append([i, v])
+            colorscale = colorscale_temp
+        elif isinstance(diagram_args["fill"], str):
+            colorscale = diagram_args["fill"]
+    else:
+        colorscale = "viridis"
+    
     fig.update_traces(dict(showscale=False,
-                           colorscale='viridis'),
+                           colorscale=colorscale),
                       selector={'type':'heatmap'})
     
     fig.update_layout(
@@ -775,7 +865,7 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     fig.show(config=config)
 
     
-def diagram_interactive(data, title=None, borders=0, names=None,
+def diagram_interactive(data, title=None, borders=0, names=None, format_names=True,
                         annotation=None, annotation_coords=[0, 0],
                         balance=None, xlab=None, ylab=None, colormap="viridis",
                         width=600, height=520, alpha=False, messages=True,
@@ -799,6 +889,9 @@ def diagram_interactive(data, title=None, borders=0, names=None,
     
     names : str, optional
         Names of species for activity lines or predominance fields.
+
+    format_names : bool, default True
+        Apply formatting to chemical formulas?
     
     annotation : str, optional
         Annotation to add to the plot.
@@ -812,6 +905,9 @@ def diagram_interactive(data, title=None, borders=0, names=None,
     
     xlab, ylab : str
         Custom x and y axes labels.
+
+    colormap : str
+        Name of the 
     
     width, height : numeric, default 600 by 520
         Width and height of the plot.
@@ -930,7 +1026,8 @@ def diagram_interactive(data, title=None, borders=0, names=None,
                     ylab = "alpha"
                 else:
                     ylab = out_units
-                ylab = chemlabel(ylab)
+                if format_names:
+                    ylab = chemlabel(ylab)
             df = pd.melt(df, id_vars=xyvars, value_vars=sp)
     
         elif len(xyvars)==2:
@@ -958,16 +1055,22 @@ def diagram_interactive(data, title=None, borders=0, names=None,
                 xlab = "pH"
             if xvar in basis_sp:
                 xlab = unit_dict[xvar]
-            xlab = chemlabel(xlab)
+            if format_names:
+                xlab = chemlabel(xlab)
     
         if len(xyvars) == 1:
-            
-            df["variable"] = df["variable"].apply(chemlabel)
+
+            if format_names:
+                df["variable"] = df["variable"].apply(chemlabel)
             
             fig = px.line(df, x=xvar, y="value", color='variable', template="simple_white",
                           width=width,  height=height,
                           labels=dict(value=ylab, x=xlab), render_mode='svg',
                          )
+
+            if isinstance(colormap, list):
+                for i,v in enumerate(colormap):
+                    fig['data'][i]['line']['color']=v
             
             fig.update_layout(xaxis_title=xlab,
                               yaxis_title=ylab,
@@ -1020,7 +1123,9 @@ def diagram_interactive(data, title=None, borders=0, names=None,
     
                 if yvar == "pH":
                     ylab = "pH"
-                ylab = chemlabel(ylab)
+                    
+                if format_names:
+                    ylab = chemlabel(ylab)
             
             fig = px.imshow(dmap, width=width, height=height, aspect="auto",
                             labels=dict(x=xlab, y=ylab, color="region"),
@@ -1029,9 +1134,14 @@ def diagram_interactive(data, title=None, borders=0, names=None,
     
             fig.update(data=[{'customdata': dmap_names,
                 'hovertemplate': xlab+': %{x}<br>'+ylab+': %{y}<br>Region: %{customdata}<extra></extra>'}])
-    
+
             if colormap == 'none':
                 colormap = [[0, 'white'], [1, 'white']]
+            elif isinstance(colormap, list):
+                colmap_temp = []
+                for i,v in enumerate(colormap):
+                    colmap_temp.append([i,v])
+                colormap = colmap_temp
             
             fig.update_traces(dict(showscale=False, 
                                    coloraxis=None, 
@@ -1048,8 +1158,14 @@ def diagram_interactive(data, title=None, borders=0, names=None,
                     df_s = df.loc[df["prednames"]==s,]
                     namex = df_s[xvar].mean()
                     namey = df_s[yvar].mean()
+
+                    if format_names:
+                        annot_text = chemlabel(s)
+                    else:
+                        annot_text = str(s)
+                    
                     fig.add_annotation(x=namex, y=namey,
-                                       text=chemlabel(s),
+                                       text=annot_text,
                                        bgcolor="rgba(255, 255, 255, 0.5)",
                                        showarrow=False)
     
@@ -1608,7 +1724,8 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
             add=False, plot_it=True, tplot=True,
             annotation=None, annotation_coords=[0,0],
             width=600, height=520, dpi=150,
-            messages=True, interactive=False, save_as=None, save_format=None,
+            messages=True, interactive=False,
+            save_as=None, save_format=None,
             save_scale=1, fig_out=False):
     
     """
@@ -1824,6 +1941,7 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
                                  title=main,
                                  borders=borders,
                                  names=names,
+                                 format_names=format_names,
                                  annotation=annotation,
                                  annotation_coords=annotation_coords,
                                  balance=balance,
