@@ -26,7 +26,10 @@ from rpy2.robjects.packages import importr
 from rpy2.robjects import pandas2ri
 from rpy2.robjects.lib import grdevices
 
-from WORMutils import chemlabel, R_output, can_connect_to
+from WORMutils import chemlabel, can_connect_to
+from wormutils_r import R_output
+
+import matplotlib.pyplot as plt
 
 pandas2ri.activate()
 
@@ -172,6 +175,8 @@ def convert(value, units, T=298.15, P=1, pH=7, logaH2O=0, messages=True):
 
     Returns
     -------
+    out : float
+        Converted value
     
     """
 
@@ -191,6 +196,128 @@ def convert(value, units, T=298.15, P=1, pH=7, logaH2O=0, messages=True):
 
     return out[0]
 
+
+def add_saturation_lines(asat, d, line_color=None, line_type=None, line_width=1,
+                         unique_styles=True, showlegend=True, messages=True):
+    """
+    Add saturation lines to an interactive plot produced by `diagram`.
+
+    Parameters
+    ----------
+    asat : output from `affinity`
+        Output from `affinity`.
+
+    d : plotly figure object
+        Interactive plot from `diagram`.
+    
+    line_color : str or list of str, optional
+        Color of saturation lines. Can be a color name, hex code, or rgb (e.g.,
+        "cornflowerblue", "#6495ED", or "rgb(100, 149, 237)")
+        or a list of color names, hex codes, or rgb values to cycle through. Note
+        that line types defined by line_type are cycled through first before
+        moving on to a new color in a list provided to line_color.
+
+    line_type : str or list of str, optional
+        The type (style) of saturation lines. Can be 'dot', 'dash', 'dashdot',
+        'longdash', 'longdashdot', or 'solid', or a list of line types to cycle
+        through. Note that line types are cycled through first before
+        moving on to a new color in a list provided to `line_color`.
+
+    line_width : float, default 1
+        The width of the saturation lines.
+    
+    messages : bool, default True
+        Print messages produced by this function?
+
+    Returns
+    -------
+    dout : plotly figure object
+        A diagram with saturation lines.
+    
+    """
+    
+    dout = copy.deepcopy(d)
+
+    x_var = asat.rx2("args").names[0]
+    y_var = asat.rx2("args").names[1]
+
+    x_range = asat.rx2("args").rx2(str(x_var))
+    y_range = asat.rx2("args").rx2(str(y_var))
+
+    if len(x_range) == 2:
+        res = 256
+    else:
+        res = int(x_range[2])
+    if len(y_range) == 2:
+        res = 256
+    else:
+        res = int(y_range[2])
+    
+    x_vals = np.linspace(start=x_range[0], stop=x_range[1], num=res)
+    y_vals = np.linspace(start=y_range[0], stop=y_range[1], num=res)
+
+    sp_idx = asat.rx2("values").names # species indices as strings
+    sp_names = list(info([int(name) for name in sp_idx])["name"])
+
+    if isinstance(line_type, str):
+        line_styles = [line_type]
+    elif isinstance(line_type, list):
+        line_styles = line_type
+    else:
+        line_styles = ['dot', 'dash', 'dashdot', 'longdash', 'longdashdot']
+
+    if not isinstance(line_color, str) and not isinstance(line_color, list):
+        line_color = ["#000000", "#6495ED", "#ED95B4", "#9AD559", "#BF6C8A"]
+    
+    if isinstance(line_color, str):
+        line_color = [line_color]
+
+
+    sp_idx_approved = []
+    p_storage = []
+    for i,isp in enumerate(sp_idx):
+        m = asat.rx2("values").rx2(str(isp)).T
+        cs = plt.contour(x_vals, y_vals, m, [0]) # contour for affinity=0
+        plt.close()
+        try:
+            p = cs.collections[0].get_paths()[0]
+            p_storage.append(p)
+            sp_idx_approved.append(isp)
+        except:
+            if messages:
+                print("'"+sp_names[i]+"' could not be included because affinity=0 for "
+                      "its formation reaction from basis species could not be found "
+                      "within the bounds of the plot.")
+
+    if unique_styles:
+        if len(sp_idx_approved) > len(line_color)*len(line_styles):
+                raise Exception("There are more mineral saturation lines than can "
+                        "be supported by line styles and colors. Set line_type "
+                        "and line_color to lists with more styles and colors.")
+
+    sp_names_approved = list(info([int(name) for name in sp_idx_approved])["name"])
+    
+    line_style_counter = 0
+    line_color_counter = 0
+    for i,isp in enumerate(sp_idx_approved):
+
+        v = p_storage[i].vertices
+        x = v[:,0]
+        y = v[:,1]
+
+        dout.add_scatter(x=x, y=y, mode='lines', name=sp_names_approved[i])
+        dout.update_traces(line_color=line_color[line_color_counter],
+                           selector=dict(name=sp_names_approved[i]), showlegend=showlegend,
+                           line=dict(dash=line_styles[line_style_counter],
+                                     width=line_width))
+        if unique_styles:
+            line_style_counter += 1
+    
+            if line_style_counter+1 > len(line_styles):
+                line_style_counter = 0
+                line_color_counter += 1
+
+    return dout
 
 
 def solubility(iaq=None, in_terms_of=None, dissociate=False, find_IS=False,
@@ -449,8 +576,10 @@ def animation(basis_args={}, species_args={}, affinity_args={},
                         "called 'species' (additional keys are optional). "
                         "Example: basis_args={'species':['CO2', 'O2', 'H2O', 'H+']}")
 
-    basis_sp = basis_args["species"]
+    
     basis_out = basis(**basis_args)
+    basis_sp = list(basis_out.index)
+    basis_state = list(basis_out["state"])
     
     if isinstance(species_args, dict):
         if "species" not in species_args.keys():
@@ -511,6 +640,10 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     if "plot_it" not in diagram_args.keys():
         diagram_args["plot_it"] = False
     diagram_args["interactive"] = True
+    if "format_names" not in diagram_args.keys():
+        format_names=True
+        format_x_names=True
+        format_y_names=True
     
     for z in zvals:
 
@@ -573,6 +706,39 @@ def animation(basis_args={}, species_args={}, affinity_args={},
             dmaps_names.append(dmap_names)
         
     xvals = __seq(xrange[0], xrange[1], length_out=xres)
+
+
+    unit_dict = {"P":"bar", "T":"°C", "pH":"", "Eh":"volts", "IS":"mol/kg"}
+    
+    if any([anim_var in basis_out.index, anim_var in list(species_out["name"])]) and anim_var not in unit_dict.keys():
+        unit_dict[anim_var] = "logact "+anim_var
+
+    for i,s in enumerate(basis_sp):
+        if basis_state[i] in ["aq", "liq", "cr"]:
+            if format_names:
+                unit_dict[s] = "log <i>a</i><sub>{}</sub>".format(chemlabel(s))
+            else:
+                unit_dict[s] = "log <i>a</i><sub>{}</sub>".format(s)
+        else:
+            if format_names:
+                unit_dict[s] = "log <i>f</i><sub>{}</sub>".format(chemlabel(s))
+            else:
+                unit_dict[s] = "log <i>f</i><sub>{}</sub>".format(s)
+
+    xlab = xvar+", "+unit_dict[xvar]
+    
+    if xvar in basis_sp:
+        xlab = unit_dict[xvar]
+    if xvar == "pH":
+        xlab = "pH"
+    
+    if is_predom_plot:
+        ylab = yvar+", "+unit_dict[yvar]
+        if yvar in basis_sp:
+            ylab = unit_dict[yvar]
+        if yvar == "pH":
+            yvar = "pH"
+
     
     if not is_predom_plot:
 
@@ -649,26 +815,7 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     else:
         yvals = __seq(yrange[0], yrange[1], length_out=yres)
 
-    unit_dict = {"P":"bar", "T":"°C", "pH":"", "Eh":"volts", "IS":"mol/kg"}
-    
-    if any([anim_var in basis_out.index, anim_var in list(species_out["name"])]) and anim_var not in unit_dict.keys():
-        unit_dict[anim_var] = "logact "+anim_var
 
-    for s in basis_sp:
-        unit_dict[s] = "logact "+s
-
-    xlab = xvar+", "+unit_dict[xvar]
-    if xvar in basis_sp:
-        xlab = unit_dict[xvar]
-    if xvar == "pH":
-        xlab = "pH"
-    
-    if is_predom_plot:
-        ylab = yvar+", "+unit_dict[yvar]
-        if yvar in basis_sp:
-            ylab = unit_dict[yvar]
-        if yvar == "pH":
-            yvar = "pH"
     
     frames = []
     slider_steps = []
@@ -945,8 +1092,16 @@ def diagram_interactive(data, title=None, borders=0, names=None, format_names=Tr
     An interactive plot.
     """
 
+    if format_names:
+        format_x_name = True
+        format_y_name = True
+    else:
+        format_x_name = False
+        format_y_name = False
+    
     with conversion.localconverter(default_converter):
         basis_sp = list(ro.conversion.rpy2py(data.rx2("basis")).rownames)
+        basis_state = list(ro.conversion.rpy2py(data.rx2("basis")).rx2("state"))
         xyvars = list(ro.conversion.rpy2py(data.rx2("vars")))
         xyvals = list(ro.conversion.rpy2py(data.rx2("vals")))
     
@@ -1025,8 +1180,9 @@ def diagram_interactive(data, title=None, borders=0, names=None, format_names=Tr
                 if alpha:
                     ylab = "alpha"
                 else:
-                    ylab = out_units
-                if format_names:
+                    ylab = out_units # A/(2.303RT)
+                    format_y_name = False
+                if format_y_name:
                     ylab = chemlabel(ylab)
             df = pd.melt(df, id_vars=xyvars, value_vars=sp)
     
@@ -1046,8 +1202,17 @@ def diagram_interactive(data, title=None, borders=0, names=None, format_names=Tr
     
         unit_dict = {"P":"bar", "T":"°C", "pH":"", "Eh":"volts", "IS":"mol/kg"}
     
-        for s in basis_sp:
-            unit_dict[s] = "logact "+s
+        for i,s in enumerate(basis_sp):
+            if basis_state[i] in ["aq", "liq", "cr"]:
+                if format_names:
+                    unit_dict[s] = "log <i>a</i><sub>{}</sub>".format(chemlabel(s))
+                else:
+                    unit_dict[s] = "log <i>a</i><sub>{}</sub>".format(s)
+            else:
+                if format_names:
+                    unit_dict[s] = "log <i>f</i><sub>{}</sub>".format(chemlabel(s))
+                else:
+                    unit_dict[s] = "log <i>f</i><sub>{}</sub>".format(s)
         
         if not isinstance(xlab, str):
             xlab = xvar+", "+unit_dict[xvar]
@@ -1055,7 +1220,7 @@ def diagram_interactive(data, title=None, borders=0, names=None, format_names=Tr
                 xlab = "pH"
             if xvar in basis_sp:
                 xlab = unit_dict[xvar]
-            if format_names:
+            if format_x_name:
                 xlab = chemlabel(xlab)
     
         if len(xyvars) == 1:
@@ -1124,7 +1289,7 @@ def diagram_interactive(data, title=None, borders=0, names=None, format_names=Tr
                 if yvar == "pH":
                     ylab = "pH"
                     
-                if format_names:
+                if format_y_name:
                     ylab = chemlabel(ylab)
             
             fig = px.imshow(dmap, width=width, height=height, aspect="auto",
@@ -2005,22 +2170,22 @@ def diagram(eout, ptype='auto', alpha=False, normalize=False,
             if add: # add='True' does not work with the current pyCHNOSZ framework
                 raise Exception("The argument 'add' must be assigned the output of the previous diagram(s).")
             else:
-                a = CHNOSZ.diagram(**args)
+                d = CHNOSZ.diagram(**args)
         elif isinstance(add, list):
             args.update({'add':True})
             for to_add in add:
                 CHNOSZ.diagram(**to_add)
-            a = CHNOSZ.diagram(**args)
+            d = CHNOSZ.diagram(**args)
 
         else:
             CHNOSZ.diagram(**add)
             args.update({'add':True})
-            a = CHNOSZ.diagram(**args)
+            d = CHNOSZ.diagram(**args)
             
     if messages:
         capture.print_captured_r_output()
     
-    return a, args
+    return d, args
 
 
 def affinity(property=None, sout=None, exceed_Ttr=False,
@@ -2277,6 +2442,7 @@ def reset(db="OBIGT", messages=True):
     
     if db == "WORM":
         url = "https://raw.githubusercontent.com/worm-portal/WORM-db/master/wrm_data.csv"
+        url_ref = "https://raw.githubusercontent.com/worm-portal/WORM-db/master/references.csv"
 
         # Load WORM database by detault
         if can_connect_to(url):
@@ -2285,10 +2451,19 @@ def reset(db="OBIGT", messages=True):
                 content = webpage.read().decode()
             WORM_DB = pd.read_csv(StringIO(content), sep=",")
 
+
+
             thermo_trunc = thermo()["OBIGT"][thermo()["OBIGT"]["name"].isin(["water", "H+", "e-"])]
             thermo(**{"OBIGT":thermo_trunc})
 
+            if can_connect_to(url_ref):
+                with urlopen(url_ref) as webpage:
+                    content = webpage.read().decode()
+                WORM_refs = pd.read_csv(StringIO(content), sep=",")
+                thermo(**{"refs":WORM_refs})
+            
             _ = add_OBIGT(WORM_DB, messages=False)
+            
             if messages:
                 naq = WORM_DB[WORM_DB["state"] == "aq"].shape[0]
                 ntot = WORM_DB.shape[0]
@@ -2384,9 +2559,12 @@ def add_OBIGT(file, species=None, force=True, messages=True):
                   'c1.e', 'c2.f', 'omega.lambda', 'z.T']
 
     if all(col in df.columns for col in OBIGT_cols):
-
+        
         df_mod_OBIGT = copy.deepcopy(df[OBIGT_cols])
 
+        if "formula_ox" in df.columns:
+            thermo(formula_ox=copy.deepcopy(df[["name", "formula_ox"]]))
+        
         if species != None:
             if isinstance(species, list):
                 df_mod_OBIGT = df_mod_OBIGT[df_mod_OBIGT["name"].isin(species)]
@@ -3240,3 +3418,138 @@ def ratlab(top="K+", bottom="H+", molality=False):
         sym = "a"
         
     return "log("+sym+bottom_charge+"<sub>"+chemlabel(top)+"</sub>/"+sym+top_charge+"<sub>"+chemlabel(bottom)+"</sub>)"
+
+
+def get_formula_ox(name):
+    """
+    Get quantities of elements and their oxidation states in a chemical compound
+    of interest. This function only works when the WORM thermodynamic database
+    is loaded. For example, an input of "magnetite" would return the following:
+    `{'Fe+3': 2.0, 'Fe+2': 1.0, 'O-2': 4.0}`.
+
+    Parameters
+    ----------
+    name : str or int
+        The name or database index of the chemical species of interest. Example:
+        `"magnetite"` or `738`.
+
+    Returns
+    -------
+    out : dict
+        A dictionary where each key represents an element in a specific
+        oxidation state, and its value is the number of that element in the
+        chemical species' formula.
+    
+    """
+    
+    if not isinstance(name, str) and not isinstance(name, int):
+        raise Exception("Must provide input as a string (chemical species name) or an integer (chemical species index).")
+
+    # convert ispecies to name
+    if isinstance(name, int):
+        name = info(name, messages=False).name.iloc[0]
+    
+    if "formula_ox" in dir(thermo()):
+        df = thermo().formula_ox
+
+        if name not in list(df["name"]):
+            raise Exception("The species " + str(name) + " was not found in the loaded thermodynamic database.")
+
+        try:
+            df[df["name"]==name]["formula_ox"].iloc[0].split()
+        except:
+            raise Exception("The species " + str(name) + " does not have "
+                    "elemental oxidation states given in the 'formula_ox' "
+                    "column of the loaded thermodynamic database.")
+        
+        split_list = df[df["name"]==name]["formula_ox"].iloc[0].split()
+        split_list_clean = [s.replace(" ", "") for s in split_list]
+
+        try:
+            elem_ox_names = [re.findall(r"^(?:\d+|)([A-Z].*$)", s)[0] for s in split_list_clean]
+        except:
+            elem_ox_names = []
+
+        elem_ox_list = []
+        for s in split_list:
+            coeff = re.findall(r"(\d+)[A-Z]", s)
+            if len(coeff) == 0:
+                coeff = 1
+            else:
+                coeff = float(coeff[0])
+            elem_ox_list.append(coeff)
+
+        return {key:val for key,val in zip(elem_ox_names, elem_ox_list)}
+
+
+def get_n_element_ox(names, element_ox, binary=False):
+    """
+    Get the number of an element of a chosen oxidation state in the formula of a
+    list of chemical species. This function only works when the WORM
+    thermodynamic database is loaded. Example:
+    
+    If binary is False, returns a list containing the number of the chosen
+    element and oxidation state in the chemical species. For example, how many
+    ferrous irons are in the formulae of hematite, fayalite, and magnetite,
+    respectively?
+    ```
+    get_n_element_ox(names=["hematite", "fayalite", "magnetite"],
+                     element_ox="Fe+2",
+                     binary=False)
+    ```
+    will return the following list representing the number of ferrous irons
+    in the formulas of hematite, fayalite, and magnetite, respectively:
+    ```
+    [0, 2.0, 1.0]
+    ```
+    If binary is True, returns a list of whether or not ferrous iron is in their
+    formulas:
+    ```
+    [False, True, True]
+    ```
+
+    Parameters
+    ----------
+    names : str or int, or a list of str or int
+        The name or database index of a chemical species, or a list of
+        names or indices. Example: `["hematite", "fayalite", "magnetite"]` or
+        `[788, 782, 798]`.
+
+    element_ox : str
+        An element with a specific oxidation state. For example: `"Fe+2"` for
+        ferrous iron.
+
+    binary : bool, default False
+        Should the output list show True/False for presence or absence of the
+        element defined by `element_ox`? By default, this parameter is set to
+        False so the output list shows quantities of the element instead.
+
+    Returns
+    -------
+    out_list : list of float
+        A list containing quantities of the chosen element oxidation state in
+        the formulas of the chemical species (if `binary=False`) or whether the
+        chosen element oxidation state is present in the formulae (if `binary=
+        True`).
+    
+    """
+
+    if not isinstance(names, list):
+        names = list(names)
+    
+    n_list = []
+    for name in names:
+        d = get_formula_ox(name)
+        n_list.append(d.get(element_ox, 0))
+
+    if binary:
+        out_list = [True if n!=0 else False for n in n_list]
+    else:
+        out_list = n_list
+    
+    return out_list
+
+
+def water_lines(d, line_color=None, line_type=None, line_width=1):
+    messages = False
+    add_saturation_lines(a, d)

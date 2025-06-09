@@ -54,7 +54,10 @@ from rpy2.robjects.packages import importr
 from rpy2.robjects import pandas2ri
 from rpy2.robjects.lib import grdevices
 
-from WORMutils import chemlabel, R_output, can_connect_to
+from WORMutils import chemlabel, can_connect_to
+from wormutils_r import R_output
+
+import matplotlib.pyplot as plt
 
 pandas2ri.activate()
 
@@ -168,6 +171,181 @@ def __seq(start, end, by=None, length_out=None):
     if abs(start + by * length_out - end) &lt; eps:
         out.append(end)
     return out
+
+
+def convert(value, units, T=298.15, P=1, pH=7, logaH2O=0, messages=True):
+    &#34;&#34;&#34;
+    Python wrapper for the convet() function in CHNOSZ.
+    Convert values between units.
+
+    Parameters
+    ----------
+    units : str
+        Name of units to set or convert to/from.
+
+    value : float
+        Value(s) to be converted.
+    
+    T : float, default 298.15
+        Temperature (Kelvin), used in G⁠-⁠logK, pe-Eh⁠ and ⁠logfO2⁠-E0⁠ conversions.
+    
+    P : float, default 1
+        Pressure (bar), used in logfO2⁠-E0⁠ conversions.
+    
+    pH : float, default 7
+        pH, used in logfO2⁠-⁠E0⁠ conversions.
+    
+    logaH2O : float, default 0
+        Logarithm of activity of water, used in ⁠logfO2⁠-E0⁠ conversions
+
+    messages : bool, default True
+        Display messages from CHNOSZ?
+
+    Returns
+    -------
+    out : float
+        Converted value
+    
+    &#34;&#34;&#34;
+
+    if isinstance(value, list):
+        raise Exception(&#34;The convert() function in pyCHNOSZ does not currently &#34;
+                &#34;support lists of values, nor the output from solubility().&#34;)
+    
+    args = {&#34;value&#34;:value, &#34;units&#34;:units, &#34;T&#34;:T, &#34;P&#34;:P, &#34;pH&#34;:pH, &#34;logaH2O&#34;:logaH2O}
+
+    capture = R_output()
+    capture.capture_r_output()
+
+    out = CHNOSZ.convert(**args)
+
+    if messages:
+        capture.print_captured_r_output()
+
+    return out[0]
+
+
+def add_saturation_lines(asat, d, line_color=None, line_type=None, line_width=1,
+                         unique_styles=True, showlegend=True, messages=True):
+    &#34;&#34;&#34;
+    Add saturation lines to an interactive plot produced by `diagram`.
+
+    Parameters
+    ----------
+    asat : output from `affinity`
+        Output from `affinity`.
+
+    d : plotly figure object
+        Interactive plot from `diagram`.
+    
+    line_color : str or list of str, optional
+        Color of saturation lines. Can be a color name, hex code, or rgb (e.g.,
+        &#34;cornflowerblue&#34;, &#34;#6495ED&#34;, or &#34;rgb(100, 149, 237)&#34;)
+        or a list of color names, hex codes, or rgb values to cycle through. Note
+        that line types defined by line_type are cycled through first before
+        moving on to a new color in a list provided to line_color.
+
+    line_type : str or list of str, optional
+        The type (style) of saturation lines. Can be &#39;dot&#39;, &#39;dash&#39;, &#39;dashdot&#39;,
+        &#39;longdash&#39;, &#39;longdashdot&#39;, or &#39;solid&#39;, or a list of line types to cycle
+        through. Note that line types are cycled through first before
+        moving on to a new color in a list provided to `line_color`.
+
+    line_width : float, default 1
+        The width of the saturation lines.
+    
+    messages : bool, default True
+        Print messages produced by this function?
+
+    Returns
+    -------
+    dout : plotly figure object
+        A diagram with saturation lines.
+    
+    &#34;&#34;&#34;
+    
+    dout = copy.deepcopy(d)
+
+    x_var = asat.rx2(&#34;args&#34;).names[0]
+    y_var = asat.rx2(&#34;args&#34;).names[1]
+
+    x_range = asat.rx2(&#34;args&#34;).rx2(str(x_var))
+    y_range = asat.rx2(&#34;args&#34;).rx2(str(y_var))
+
+    if len(x_range) == 2:
+        res = 256
+    else:
+        res = int(x_range[2])
+    if len(y_range) == 2:
+        res = 256
+    else:
+        res = int(y_range[2])
+    
+    x_vals = np.linspace(start=x_range[0], stop=x_range[1], num=res)
+    y_vals = np.linspace(start=y_range[0], stop=y_range[1], num=res)
+
+    sp_idx = asat.rx2(&#34;values&#34;).names # species indices as strings
+    sp_names = list(info([int(name) for name in sp_idx])[&#34;name&#34;])
+
+    if isinstance(line_type, str):
+        line_styles = [line_type]
+    elif isinstance(line_type, list):
+        line_styles = line_type
+    else:
+        line_styles = [&#39;dot&#39;, &#39;dash&#39;, &#39;dashdot&#39;, &#39;longdash&#39;, &#39;longdashdot&#39;]
+
+    if not isinstance(line_color, str) and not isinstance(line_color, list):
+        line_color = [&#34;#000000&#34;, &#34;#6495ED&#34;, &#34;#ED95B4&#34;, &#34;#9AD559&#34;, &#34;#BF6C8A&#34;]
+    
+    if isinstance(line_color, str):
+        line_color = [line_color]
+
+
+    sp_idx_approved = []
+    p_storage = []
+    for i,isp in enumerate(sp_idx):
+        m = asat.rx2(&#34;values&#34;).rx2(str(isp)).T
+        cs = plt.contour(x_vals, y_vals, m, [0]) # contour for affinity=0
+        plt.close()
+        try:
+            p = cs.collections[0].get_paths()[0]
+            p_storage.append(p)
+            sp_idx_approved.append(isp)
+        except:
+            if messages:
+                print(&#34;&#39;&#34;+sp_names[i]+&#34;&#39; could not be included because affinity=0 for &#34;
+                      &#34;its formation reaction from basis species could not be found &#34;
+                      &#34;within the bounds of the plot.&#34;)
+
+    if unique_styles:
+        if len(sp_idx_approved) &gt; len(line_color)*len(line_styles):
+                raise Exception(&#34;There are more mineral saturation lines than can &#34;
+                        &#34;be supported by line styles and colors. Set line_type &#34;
+                        &#34;and line_color to lists with more styles and colors.&#34;)
+
+    sp_names_approved = list(info([int(name) for name in sp_idx_approved])[&#34;name&#34;])
+    
+    line_style_counter = 0
+    line_color_counter = 0
+    for i,isp in enumerate(sp_idx_approved):
+
+        v = p_storage[i].vertices
+        x = v[:,0]
+        y = v[:,1]
+
+        dout.add_scatter(x=x, y=y, mode=&#39;lines&#39;, name=sp_names_approved[i])
+        dout.update_traces(line_color=line_color[line_color_counter],
+                           selector=dict(name=sp_names_approved[i]), showlegend=showlegend,
+                           line=dict(dash=line_styles[line_style_counter],
+                                     width=line_width))
+        if unique_styles:
+            line_style_counter += 1
+    
+            if line_style_counter+1 &gt; len(line_styles):
+                line_style_counter = 0
+                line_color_counter += 1
+
+    return dout
 
 
 def solubility(iaq=None, in_terms_of=None, dissociate=False, find_IS=False,
@@ -345,7 +523,7 @@ def retrieve(elements=None, ligands=None, state=None, T=None, P=&#34;Psat&#34;,
     
 def animation(basis_args={}, species_args={}, affinity_args={},
               equilibrate_args=None, diagram_args={},
-              anim_var=&#34;T&#34;, anim_range=[0, 350, 8],
+              anim_var=&#34;T&#34;, anim_range=[0, 350, 8], xlab=None, ylab=None,
               save_as=&#34;newanimationframe&#34;, save_format=&#34;png&#34;, height=300,
               width=400, save_scale=1,
               messages=False):
@@ -391,6 +569,9 @@ def animation(basis_args={}, species_args={}, affinity_args={},
         The first two numbers in the list are the starting and ending
         values for `anim_var`. The third number in the list is the desired
         number of animation frames.
+
+    xlab, ylab : str, optional
+        Custom names for the X and Y axes.
     
     messages : bool, default True
         Display messages from CHNOSZ?
@@ -423,9 +604,11 @@ def animation(basis_args={}, species_args={}, affinity_args={},
                         &#34;called &#39;species&#39; (additional keys are optional). &#34;
                         &#34;Example: basis_args={&#39;species&#39;:[&#39;CO2&#39;, &#39;O2&#39;, &#39;H2O&#39;, &#39;H+&#39;]}&#34;)
 
-    basis_sp = basis_args[&#34;species&#34;]
+    
     basis_out = basis(**basis_args)
-
+    basis_sp = list(basis_out.index)
+    basis_state = list(basis_out[&#34;state&#34;])
+    
     if isinstance(species_args, dict):
         if &#34;species&#34; not in species_args.keys():
             raise Exception(&#34;species_args needs to contain a list of species for &#39;species&#39;. &#34;
@@ -460,7 +643,6 @@ def animation(basis_args={}, species_args={}, affinity_args={},
             for i in range(0, len(mod_species_logact)) :
                 species_out = species(species_args[&#34;species&#34;][i], mod_species_logact[i])
 
-
     sp = list(species_out[&#34;name&#34;])
 
     if isinstance(sp[0], (int, np.integer)):
@@ -486,14 +668,19 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     if &#34;plot_it&#34; not in diagram_args.keys():
         diagram_args[&#34;plot_it&#34;] = False
     diagram_args[&#34;interactive&#34;] = True
+    if &#34;format_names&#34; not in diagram_args.keys():
+        format_names=True
+        format_x_names=True
+        format_y_names=True
     
     for z in zvals:
-        
 
         if anim_var in basis_out.index:
             basis_out = basis(anim_var, z)
         elif anim_var in list(species_out[&#34;name&#34;]):
-            species_out = species(anim_var, z)
+            species_out = species(anim_var, -z)
+        elif anim_var == &#34;pH&#34;:
+            basis_out = basis(&#34;H+&#34;, -z)
         else:
             affinity_args[anim_var] = z
         
@@ -547,6 +734,39 @@ def animation(basis_args={}, species_args={}, affinity_args={},
             dmaps_names.append(dmap_names)
         
     xvals = __seq(xrange[0], xrange[1], length_out=xres)
+
+
+    unit_dict = {&#34;P&#34;:&#34;bar&#34;, &#34;T&#34;:&#34;°C&#34;, &#34;pH&#34;:&#34;&#34;, &#34;Eh&#34;:&#34;volts&#34;, &#34;IS&#34;:&#34;mol/kg&#34;}
+    
+    if any([anim_var in basis_out.index, anim_var in list(species_out[&#34;name&#34;])]) and anim_var not in unit_dict.keys():
+        unit_dict[anim_var] = &#34;logact &#34;+anim_var
+
+    for i,s in enumerate(basis_sp):
+        if basis_state[i] in [&#34;aq&#34;, &#34;liq&#34;, &#34;cr&#34;]:
+            if format_names:
+                unit_dict[s] = &#34;log &lt;i&gt;a&lt;/i&gt;&lt;sub&gt;{}&lt;/sub&gt;&#34;.format(chemlabel(s))
+            else:
+                unit_dict[s] = &#34;log &lt;i&gt;a&lt;/i&gt;&lt;sub&gt;{}&lt;/sub&gt;&#34;.format(s)
+        else:
+            if format_names:
+                unit_dict[s] = &#34;log &lt;i&gt;f&lt;/i&gt;&lt;sub&gt;{}&lt;/sub&gt;&#34;.format(chemlabel(s))
+            else:
+                unit_dict[s] = &#34;log &lt;i&gt;f&lt;/i&gt;&lt;sub&gt;{}&lt;/sub&gt;&#34;.format(s)
+
+    xlab = xvar+&#34;, &#34;+unit_dict[xvar]
+    
+    if xvar in basis_sp:
+        xlab = unit_dict[xvar]
+    if xvar == &#34;pH&#34;:
+        xlab = &#34;pH&#34;
+    
+    if is_predom_plot:
+        ylab = yvar+&#34;, &#34;+unit_dict[yvar]
+        if yvar in basis_sp:
+            ylab = unit_dict[yvar]
+        if yvar == &#34;pH&#34;:
+            yvar = &#34;pH&#34;
+
     
     if not is_predom_plot:
 
@@ -560,10 +780,24 @@ def animation(basis_args={}, species_args={}, affinity_args={},
         
         df_c = pd.concat(dfs)
 
-        fig = px.line(df_c, x=xvar, y=&#34;value&#34;, color=&#39;variable&#39;, template=&#34;simple_white&#34;,
-                      width=500,  height=400, animation_frame=anim_var,
-                      labels=dict(value=yvar, x=xvar),
-                     )
+        if &#34;fill&#34; in diagram_args.keys():
+            if isinstance(diagram_args[&#34;fill&#34;], list):
+                colormap = {key:col for key,col in zip(list(dict.fromkeys(df_c[&#34;variable&#34;])), diagram_args[&#34;fill&#34;])}
+            else:
+                colormap = diagram_args[&#34;fill&#34;]
+
+            # with color mapping
+            fig = px.line(df_c, x=xvar, y=&#34;value&#34;, color=&#39;variable&#39;, template=&#34;simple_white&#34;,
+                          width=500,  height=400, animation_frame=anim_var,
+                          color_discrete_map = colormap,
+                          labels=dict(value=yvar, x=xvar),
+                         )
+        else:
+            # without color mapping
+            fig = px.line(df_c, x=xvar, y=&#34;value&#34;, color=&#39;variable&#39;, template=&#34;simple_white&#34;,
+                          width=500,  height=400, animation_frame=anim_var,
+                          labels=dict(value=yvar, x=xvar),
+                         )
         
         if &#34;annotation&#34; in diagram_args.keys():
             if &#34;annotation_coords&#34; not in diagram_args.keys():
@@ -579,6 +813,16 @@ def animation(basis_args={}, species_args={}, affinity_args={},
         
         if &#39;main&#39; in diagram_args.keys():
             fig.update_layout(title={&#39;text&#39;:diagram_args[&#34;main&#34;], &#39;x&#39;:0.5, &#39;xanchor&#39;:&#39;center&#39;})
+
+        if isinstance(xlab, str):
+            fig.update_layout(xaxis_title=xlab)
+        if isinstance(ylab, str):
+            fig.update_layout(yaxis_title=ylab)
+        
+        if &#39;fill&#39; in diagram_args.keys():
+            if isinstance(diagram_args[&#34;fill&#34;], list):
+                for i,v in enumerate(diagram_args[&#34;fill&#34;]):
+                    fig[&#39;data&#39;][i][&#39;line&#39;][&#39;color&#39;]=v
         
         fig.update_layout(legend_title=None)
 
@@ -599,26 +843,7 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     else:
         yvals = __seq(yrange[0], yrange[1], length_out=yres)
 
-    unit_dict = {&#34;P&#34;:&#34;bar&#34;, &#34;T&#34;:&#34;°C&#34;, &#34;pH&#34;:&#34;&#34;, &#34;Eh&#34;:&#34;volts&#34;, &#34;IS&#34;:&#34;mol/kg&#34;}
-    
-    if any([anim_var in basis_out.index, anim_var in list(species_out[&#34;name&#34;])]) and anim_var not in unit_dict.keys():
-        unit_dict[anim_var] = &#34;logact &#34;+anim_var
 
-    for s in basis_sp:
-        unit_dict[s] = &#34;logact &#34;+s
-
-    xlab = xvar+&#34;, &#34;+unit_dict[xvar]
-    if xvar in basis_sp:
-        xlab = unit_dict[xvar]
-    if xvar == &#34;pH&#34;:
-        xlab = &#34;pH&#34;
-    
-    if is_predom_plot:
-        ylab = yvar+&#34;, &#34;+unit_dict[yvar]
-        if yvar in basis_sp:
-            ylab = unit_dict[yvar]
-        if yvar == &#34;pH&#34;:
-            yvar = &#34;pH&#34;
     
     frames = []
     slider_steps = []
@@ -698,7 +923,7 @@ def animation(basis_args={}, species_args={}, affinity_args={},
                                 hovertemplate=hover_xlab+&#39;&lt;br&gt;&#39;+hover_ylab+&#39;&lt;br&gt;Region: %{customdata}&lt;extra&gt;&lt;/extra&gt;&#39;)
 
         heatmaps.append(heatmaps_i)
-        
+
         frame = go.Frame(data=[heatmaps_i],
                          name=str(i),
                          layout=go.Layout(annotations=annotations_i))
@@ -771,8 +996,20 @@ def animation(basis_args={}, species_args={}, affinity_args={},
 
     )
 
+
+    if &#39;fill&#39; in diagram_args.keys():
+        if isinstance(diagram_args[&#34;fill&#34;], list):
+            colorscale_temp = []
+            for i,v in enumerate(diagram_args[&#34;fill&#34;]):
+                colorscale_temp.append([i, v])
+            colorscale = colorscale_temp
+        elif isinstance(diagram_args[&#34;fill&#34;], str):
+            colorscale = diagram_args[&#34;fill&#34;]
+    else:
+        colorscale = &#34;viridis&#34;
+    
     fig.update_traces(dict(showscale=False,
-                           colorscale=&#39;viridis&#39;),
+                           colorscale=colorscale),
                       selector={&#39;type&#39;:&#39;heatmap&#39;})
     
     fig.update_layout(
@@ -803,7 +1040,7 @@ def animation(basis_args={}, species_args={}, affinity_args={},
     fig.show(config=config)
 
     
-def diagram_interactive(data, title=None, borders=0, names=None,
+def diagram_interactive(data, title=None, borders=0, names=None, format_names=True,
                         annotation=None, annotation_coords=[0, 0],
                         balance=None, xlab=None, ylab=None, colormap=&#34;viridis&#34;,
                         width=600, height=520, alpha=False, messages=True,
@@ -827,6 +1064,9 @@ def diagram_interactive(data, title=None, borders=0, names=None,
     
     names : str, optional
         Names of species for activity lines or predominance fields.
+
+    format_names : bool, default True
+        Apply formatting to chemical formulas?
     
     annotation : str, optional
         Annotation to add to the plot.
@@ -840,6 +1080,9 @@ def diagram_interactive(data, title=None, borders=0, names=None,
     
     xlab, ylab : str
         Custom x and y axes labels.
+
+    colormap : str
+        Name of the 
     
     width, height : numeric, default 600 by 520
         Width and height of the plot.
@@ -877,8 +1120,16 @@ def diagram_interactive(data, title=None, borders=0, names=None,
     An interactive plot.
     &#34;&#34;&#34;
 
+    if format_names:
+        format_x_name = True
+        format_y_name = True
+    else:
+        format_x_name = False
+        format_y_name = False
+    
     with conversion.localconverter(default_converter):
         basis_sp = list(ro.conversion.rpy2py(data.rx2(&#34;basis&#34;)).rownames)
+        basis_state = list(ro.conversion.rpy2py(data.rx2(&#34;basis&#34;)).rx2(&#34;state&#34;))
         xyvars = list(ro.conversion.rpy2py(data.rx2(&#34;vars&#34;)))
         xyvals = list(ro.conversion.rpy2py(data.rx2(&#34;vals&#34;)))
     
@@ -957,8 +1208,10 @@ def diagram_interactive(data, title=None, borders=0, names=None,
                 if alpha:
                     ylab = &#34;alpha&#34;
                 else:
-                    ylab = out_units
-                ylab = chemlabel(ylab)
+                    ylab = out_units # A/(2.303RT)
+                    format_y_name = False
+                if format_y_name:
+                    ylab = chemlabel(ylab)
             df = pd.melt(df, id_vars=xyvars, value_vars=sp)
     
         elif len(xyvars)==2:
@@ -977,8 +1230,17 @@ def diagram_interactive(data, title=None, borders=0, names=None,
     
         unit_dict = {&#34;P&#34;:&#34;bar&#34;, &#34;T&#34;:&#34;°C&#34;, &#34;pH&#34;:&#34;&#34;, &#34;Eh&#34;:&#34;volts&#34;, &#34;IS&#34;:&#34;mol/kg&#34;}
     
-        for s in basis_sp:
-            unit_dict[s] = &#34;logact &#34;+s
+        for i,s in enumerate(basis_sp):
+            if basis_state[i] in [&#34;aq&#34;, &#34;liq&#34;, &#34;cr&#34;]:
+                if format_names:
+                    unit_dict[s] = &#34;log &lt;i&gt;a&lt;/i&gt;&lt;sub&gt;{}&lt;/sub&gt;&#34;.format(chemlabel(s))
+                else:
+                    unit_dict[s] = &#34;log &lt;i&gt;a&lt;/i&gt;&lt;sub&gt;{}&lt;/sub&gt;&#34;.format(s)
+            else:
+                if format_names:
+                    unit_dict[s] = &#34;log &lt;i&gt;f&lt;/i&gt;&lt;sub&gt;{}&lt;/sub&gt;&#34;.format(chemlabel(s))
+                else:
+                    unit_dict[s] = &#34;log &lt;i&gt;f&lt;/i&gt;&lt;sub&gt;{}&lt;/sub&gt;&#34;.format(s)
         
         if not isinstance(xlab, str):
             xlab = xvar+&#34;, &#34;+unit_dict[xvar]
@@ -986,16 +1248,22 @@ def diagram_interactive(data, title=None, borders=0, names=None,
                 xlab = &#34;pH&#34;
             if xvar in basis_sp:
                 xlab = unit_dict[xvar]
-            xlab = chemlabel(xlab)
+            if format_x_name:
+                xlab = chemlabel(xlab)
     
         if len(xyvars) == 1:
-            
-            df[&#34;variable&#34;] = df[&#34;variable&#34;].apply(chemlabel)
+
+            if format_names:
+                df[&#34;variable&#34;] = df[&#34;variable&#34;].apply(chemlabel)
             
             fig = px.line(df, x=xvar, y=&#34;value&#34;, color=&#39;variable&#39;, template=&#34;simple_white&#34;,
                           width=width,  height=height,
                           labels=dict(value=ylab, x=xlab), render_mode=&#39;svg&#39;,
                          )
+
+            if isinstance(colormap, list):
+                for i,v in enumerate(colormap):
+                    fig[&#39;data&#39;][i][&#39;line&#39;][&#39;color&#39;]=v
             
             fig.update_layout(xaxis_title=xlab,
                               yaxis_title=ylab,
@@ -1048,7 +1316,9 @@ def diagram_interactive(data, title=None, borders=0, names=None,
     
                 if yvar == &#34;pH&#34;:
                     ylab = &#34;pH&#34;
-                ylab = chemlabel(ylab)
+                    
+                if format_y_name:
+                    ylab = chemlabel(ylab)
             
             fig = px.imshow(dmap, width=width, height=height, aspect=&#34;auto&#34;,
                             labels=dict(x=xlab, y=ylab, color=&#34;region&#34;),
@@ -1057,9 +1327,14 @@ def diagram_interactive(data, title=None, borders=0, names=None,
     
             fig.update(data=[{&#39;customdata&#39;: dmap_names,
                 &#39;hovertemplate&#39;: xlab+&#39;: %{x}&lt;br&gt;&#39;+ylab+&#39;: %{y}&lt;br&gt;Region: %{customdata}&lt;extra&gt;&lt;/extra&gt;&#39;}])
-    
+
             if colormap == &#39;none&#39;:
                 colormap = [[0, &#39;white&#39;], [1, &#39;white&#39;]]
+            elif isinstance(colormap, list):
+                colmap_temp = []
+                for i,v in enumerate(colormap):
+                    colmap_temp.append([i,v])
+                colormap = colmap_temp
             
             fig.update_traces(dict(showscale=False, 
                                    coloraxis=None, 
@@ -1076,8 +1351,14 @@ def diagram_interactive(data, title=None, borders=0, names=None,
                     df_s = df.loc[df[&#34;prednames&#34;]==s,]
                     namex = df_s[xvar].mean()
                     namey = df_s[yvar].mean()
+
+                    if format_names:
+                        annot_text = chemlabel(s)
+                    else:
+                        annot_text = str(s)
+                    
                     fig.add_annotation(x=namex, y=namey,
-                                       text=chemlabel(s),
+                                       text=annot_text,
                                        bgcolor=&#34;rgba(255, 255, 255, 0.5)&#34;,
                                        showarrow=False)
     
@@ -1636,7 +1917,8 @@ def diagram(eout, ptype=&#39;auto&#39;, alpha=False, normalize=False,
             add=False, plot_it=True, tplot=True,
             annotation=None, annotation_coords=[0,0],
             width=600, height=520, dpi=150,
-            messages=True, interactive=False, save_as=None, save_format=None,
+            messages=True, interactive=False,
+            save_as=None, save_format=None,
             save_scale=1, fig_out=False):
     
     &#34;&#34;&#34;
@@ -1852,6 +2134,7 @@ def diagram(eout, ptype=&#39;auto&#39;, alpha=False, normalize=False,
                                  title=main,
                                  borders=borders,
                                  names=names,
+                                 format_names=format_names,
                                  annotation=annotation,
                                  annotation_coords=annotation_coords,
                                  balance=balance,
@@ -1915,22 +2198,22 @@ def diagram(eout, ptype=&#39;auto&#39;, alpha=False, normalize=False,
             if add: # add=&#39;True&#39; does not work with the current pyCHNOSZ framework
                 raise Exception(&#34;The argument &#39;add&#39; must be assigned the output of the previous diagram(s).&#34;)
             else:
-                a = CHNOSZ.diagram(**args)
+                d = CHNOSZ.diagram(**args)
         elif isinstance(add, list):
             args.update({&#39;add&#39;:True})
             for to_add in add:
                 CHNOSZ.diagram(**to_add)
-            a = CHNOSZ.diagram(**args)
+            d = CHNOSZ.diagram(**args)
 
         else:
             CHNOSZ.diagram(**add)
             args.update({&#39;add&#39;:True})
-            a = CHNOSZ.diagram(**args)
+            d = CHNOSZ.diagram(**args)
             
     if messages:
         capture.print_captured_r_output()
     
-    return a, args
+    return d, args
 
 
 def affinity(property=None, sout=None, exceed_Ttr=False,
@@ -2187,6 +2470,7 @@ def reset(db=&#34;OBIGT&#34;, messages=True):
     
     if db == &#34;WORM&#34;:
         url = &#34;https://raw.githubusercontent.com/worm-portal/WORM-db/master/wrm_data.csv&#34;
+        url_ref = &#34;https://raw.githubusercontent.com/worm-portal/WORM-db/master/references.csv&#34;
 
         # Load WORM database by detault
         if can_connect_to(url):
@@ -2195,10 +2479,19 @@ def reset(db=&#34;OBIGT&#34;, messages=True):
                 content = webpage.read().decode()
             WORM_DB = pd.read_csv(StringIO(content), sep=&#34;,&#34;)
 
+
+
             thermo_trunc = thermo()[&#34;OBIGT&#34;][thermo()[&#34;OBIGT&#34;][&#34;name&#34;].isin([&#34;water&#34;, &#34;H+&#34;, &#34;e-&#34;])]
             thermo(**{&#34;OBIGT&#34;:thermo_trunc})
 
+            if can_connect_to(url_ref):
+                with urlopen(url_ref) as webpage:
+                    content = webpage.read().decode()
+                WORM_refs = pd.read_csv(StringIO(content), sep=&#34;,&#34;)
+                thermo(**{&#34;refs&#34;:WORM_refs})
+            
             _ = add_OBIGT(WORM_DB, messages=False)
+            
             if messages:
                 naq = WORM_DB[WORM_DB[&#34;state&#34;] == &#34;aq&#34;].shape[0]
                 ntot = WORM_DB.shape[0]
@@ -2294,9 +2587,12 @@ def add_OBIGT(file, species=None, force=True, messages=True):
                   &#39;c1.e&#39;, &#39;c2.f&#39;, &#39;omega.lambda&#39;, &#39;z.T&#39;]
 
     if all(col in df.columns for col in OBIGT_cols):
-
+        
         df_mod_OBIGT = copy.deepcopy(df[OBIGT_cols])
 
+        if &#34;formula_ox&#34; in df.columns:
+            thermo(formula_ox=copy.deepcopy(df[[&#34;name&#34;, &#34;formula_ox&#34;]]))
+        
         if species != None:
             if isinstance(species, list):
                 df_mod_OBIGT = df_mod_OBIGT[df_mod_OBIGT[&#34;name&#34;].isin(species)]
@@ -3149,7 +3445,142 @@ def ratlab(top=&#34;K+&#34;, bottom=&#34;H+&#34;, molality=False):
     else:
         sym = &#34;a&#34;
         
-    return &#34;log(&#34;+sym+bottom_charge+&#34;&lt;sub&gt;&#34;+chemlabel(top)+&#34;&lt;/sub&gt;/&#34;+sym+top_charge+&#34;&lt;sub&gt;&#34;+chemlabel(bottom)+&#34;&lt;/sub&gt;)&#34;</code></pre>
+    return &#34;log(&#34;+sym+bottom_charge+&#34;&lt;sub&gt;&#34;+chemlabel(top)+&#34;&lt;/sub&gt;/&#34;+sym+top_charge+&#34;&lt;sub&gt;&#34;+chemlabel(bottom)+&#34;&lt;/sub&gt;)&#34;
+
+
+def get_formula_ox(name):
+    &#34;&#34;&#34;
+    Get quantities of elements and their oxidation states in a chemical compound
+    of interest. This function only works when the WORM thermodynamic database
+    is loaded. For example, an input of &#34;magnetite&#34; would return the following:
+    `{&#39;Fe+3&#39;: 2.0, &#39;Fe+2&#39;: 1.0, &#39;O-2&#39;: 4.0}`.
+
+    Parameters
+    ----------
+    name : str or int
+        The name or database index of the chemical species of interest. Example:
+        `&#34;magnetite&#34;` or `738`.
+
+    Returns
+    -------
+    out : dict
+        A dictionary where each key represents an element in a specific
+        oxidation state, and its value is the number of that element in the
+        chemical species&#39; formula.
+    
+    &#34;&#34;&#34;
+    
+    if not isinstance(name, str) and not isinstance(name, int):
+        raise Exception(&#34;Must provide input as a string (chemical species name) or an integer (chemical species index).&#34;)
+
+    # convert ispecies to name
+    if isinstance(name, int):
+        name = info(name, messages=False).name.iloc[0]
+    
+    if &#34;formula_ox&#34; in dir(thermo()):
+        df = thermo().formula_ox
+
+        if name not in list(df[&#34;name&#34;]):
+            raise Exception(&#34;The species &#34; + str(name) + &#34; was not found in the loaded thermodynamic database.&#34;)
+
+        try:
+            df[df[&#34;name&#34;]==name][&#34;formula_ox&#34;].iloc[0].split()
+        except:
+            raise Exception(&#34;The species &#34; + str(name) + &#34; does not have &#34;
+                    &#34;elemental oxidation states given in the &#39;formula_ox&#39; &#34;
+                    &#34;column of the loaded thermodynamic database.&#34;)
+        
+        split_list = df[df[&#34;name&#34;]==name][&#34;formula_ox&#34;].iloc[0].split()
+        split_list_clean = [s.replace(&#34; &#34;, &#34;&#34;) for s in split_list]
+
+        try:
+            elem_ox_names = [re.findall(r&#34;^(?:\d+|)([A-Z].*$)&#34;, s)[0] for s in split_list_clean]
+        except:
+            elem_ox_names = []
+
+        elem_ox_list = []
+        for s in split_list:
+            coeff = re.findall(r&#34;(\d+)[A-Z]&#34;, s)
+            if len(coeff) == 0:
+                coeff = 1
+            else:
+                coeff = float(coeff[0])
+            elem_ox_list.append(coeff)
+
+        return {key:val for key,val in zip(elem_ox_names, elem_ox_list)}
+
+
+def get_n_element_ox(names, element_ox, binary=False):
+    &#34;&#34;&#34;
+    Get the number of an element of a chosen oxidation state in the formula of a
+    list of chemical species. This function only works when the WORM
+    thermodynamic database is loaded. Example:
+    
+    If binary is False, returns a list containing the number of the chosen
+    element and oxidation state in the chemical species. For example, how many
+    ferrous irons are in the formulae of hematite, fayalite, and magnetite,
+    respectively?
+    ```
+    get_n_element_ox(names=[&#34;hematite&#34;, &#34;fayalite&#34;, &#34;magnetite&#34;],
+                     element_ox=&#34;Fe+2&#34;,
+                     binary=False)
+    ```
+    will return the following list representing the number of ferrous irons
+    in the formulas of hematite, fayalite, and magnetite, respectively:
+    ```
+    [0, 2.0, 1.0]
+    ```
+    If binary is True, returns a list of whether or not ferrous iron is in their
+    formulas:
+    ```
+    [False, True, True]
+    ```
+
+    Parameters
+    ----------
+    names : str or int, or a list of str or int
+        The name or database index of a chemical species, or a list of
+        names or indices. Example: `[&#34;hematite&#34;, &#34;fayalite&#34;, &#34;magnetite&#34;]` or
+        `[788, 782, 798]`.
+
+    element_ox : str
+        An element with a specific oxidation state. For example: `&#34;Fe+2&#34;` for
+        ferrous iron.
+
+    binary : bool, default False
+        Should the output list show True/False for presence or absence of the
+        element defined by `element_ox`? By default, this parameter is set to
+        False so the output list shows quantities of the element instead.
+
+    Returns
+    -------
+    out_list : list of float
+        A list containing quantities of the chosen element oxidation state in
+        the formulas of the chemical species (if `binary=False`) or whether the
+        chosen element oxidation state is present in the formulae (if `binary=
+        True`).
+    
+    &#34;&#34;&#34;
+
+    if not isinstance(names, list):
+        names = list(names)
+    
+    n_list = []
+    for name in names:
+        d = get_formula_ox(name)
+        n_list.append(d.get(element_ox, 0))
+
+    if binary:
+        out_list = [True if n!=0 else False for n in n_list]
+    else:
+        out_list = n_list
+    
+    return out_list
+
+
+def water_lines(d, line_color=None, line_type=None, line_width=1):
+    messages = False
+    add_saturation_lines(a, d)</code></pre>
 </details>
 </section>
 <section>
@@ -3263,9 +3694,12 @@ modified.</dd>
                   &#39;c1.e&#39;, &#39;c2.f&#39;, &#39;omega.lambda&#39;, &#39;z.T&#39;]
 
     if all(col in df.columns for col in OBIGT_cols):
-
+        
         df_mod_OBIGT = copy.deepcopy(df[OBIGT_cols])
 
+        if &#34;formula_ox&#34; in df.columns:
+            thermo(formula_ox=copy.deepcopy(df[[&#34;name&#34;, &#34;formula_ox&#34;]]))
+        
         if species != None:
             if isinstance(species, list):
                 df_mod_OBIGT = df_mod_OBIGT[df_mod_OBIGT[&#34;name&#34;].isin(species)]
@@ -3345,6 +3779,165 @@ Add proteins to the OBIGT thermodynamic database.</p>
         capture.print_captured_r_output()
     
     return list(apout)</code></pre>
+</details>
+</dd>
+<dt id="pyCHNOSZ.fun.add_saturation_lines"><code class="name flex">
+<span>def <span class="ident">add_saturation_lines</span></span>(<span>asat, d, line_color=None, line_type=None, line_width=1, unique_styles=True, showlegend=True, messages=True)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Add saturation lines to an interactive plot produced by <code><a title="pyCHNOSZ.fun.diagram" href="#pyCHNOSZ.fun.diagram">diagram()</a></code>.</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>asat</code></strong> :&ensp;<code>output from </code>affinity``</dt>
+<dd>Output from <code><a title="pyCHNOSZ.fun.affinity" href="#pyCHNOSZ.fun.affinity">affinity()</a></code>.</dd>
+<dt><strong><code>d</code></strong> :&ensp;<code>plotly figure object</code></dt>
+<dd>Interactive plot from <code><a title="pyCHNOSZ.fun.diagram" href="#pyCHNOSZ.fun.diagram">diagram()</a></code>.</dd>
+<dt><strong><code>line_color</code></strong> :&ensp;<code>str</code> or <code>list</code> of <code>str</code>, optional</dt>
+<dd>Color of saturation lines. Can be a color name, hex code, or rgb (e.g.,
+"cornflowerblue", "#6495ED", or "rgb(100, 149, 237)")
+or a list of color names, hex codes, or rgb values to cycle through. Note
+that line types defined by line_type are cycled through first before
+moving on to a new color in a list provided to line_color.</dd>
+<dt><strong><code>line_type</code></strong> :&ensp;<code>str</code> or <code>list</code> of <code>str</code>, optional</dt>
+<dd>The type (style) of saturation lines. Can be 'dot', 'dash', 'dashdot',
+'longdash', 'longdashdot', or 'solid', or a list of line types to cycle
+through. Note that line types are cycled through first before
+moving on to a new color in a list provided to <code>line_color</code>.</dd>
+<dt><strong><code>line_width</code></strong> :&ensp;<code>float</code>, default <code>1</code></dt>
+<dd>The width of the saturation lines.</dd>
+<dt><strong><code>messages</code></strong> :&ensp;<code>bool</code>, default <code>True</code></dt>
+<dd>Print messages produced by this function?</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>dout</code></strong> :&ensp;<code>plotly figure object</code></dt>
+<dd>A diagram with saturation lines.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_saturation_lines(asat, d, line_color=None, line_type=None, line_width=1,
+                         unique_styles=True, showlegend=True, messages=True):
+    &#34;&#34;&#34;
+    Add saturation lines to an interactive plot produced by `diagram`.
+
+    Parameters
+    ----------
+    asat : output from `affinity`
+        Output from `affinity`.
+
+    d : plotly figure object
+        Interactive plot from `diagram`.
+    
+    line_color : str or list of str, optional
+        Color of saturation lines. Can be a color name, hex code, or rgb (e.g.,
+        &#34;cornflowerblue&#34;, &#34;#6495ED&#34;, or &#34;rgb(100, 149, 237)&#34;)
+        or a list of color names, hex codes, or rgb values to cycle through. Note
+        that line types defined by line_type are cycled through first before
+        moving on to a new color in a list provided to line_color.
+
+    line_type : str or list of str, optional
+        The type (style) of saturation lines. Can be &#39;dot&#39;, &#39;dash&#39;, &#39;dashdot&#39;,
+        &#39;longdash&#39;, &#39;longdashdot&#39;, or &#39;solid&#39;, or a list of line types to cycle
+        through. Note that line types are cycled through first before
+        moving on to a new color in a list provided to `line_color`.
+
+    line_width : float, default 1
+        The width of the saturation lines.
+    
+    messages : bool, default True
+        Print messages produced by this function?
+
+    Returns
+    -------
+    dout : plotly figure object
+        A diagram with saturation lines.
+    
+    &#34;&#34;&#34;
+    
+    dout = copy.deepcopy(d)
+
+    x_var = asat.rx2(&#34;args&#34;).names[0]
+    y_var = asat.rx2(&#34;args&#34;).names[1]
+
+    x_range = asat.rx2(&#34;args&#34;).rx2(str(x_var))
+    y_range = asat.rx2(&#34;args&#34;).rx2(str(y_var))
+
+    if len(x_range) == 2:
+        res = 256
+    else:
+        res = int(x_range[2])
+    if len(y_range) == 2:
+        res = 256
+    else:
+        res = int(y_range[2])
+    
+    x_vals = np.linspace(start=x_range[0], stop=x_range[1], num=res)
+    y_vals = np.linspace(start=y_range[0], stop=y_range[1], num=res)
+
+    sp_idx = asat.rx2(&#34;values&#34;).names # species indices as strings
+    sp_names = list(info([int(name) for name in sp_idx])[&#34;name&#34;])
+
+    if isinstance(line_type, str):
+        line_styles = [line_type]
+    elif isinstance(line_type, list):
+        line_styles = line_type
+    else:
+        line_styles = [&#39;dot&#39;, &#39;dash&#39;, &#39;dashdot&#39;, &#39;longdash&#39;, &#39;longdashdot&#39;]
+
+    if not isinstance(line_color, str) and not isinstance(line_color, list):
+        line_color = [&#34;#000000&#34;, &#34;#6495ED&#34;, &#34;#ED95B4&#34;, &#34;#9AD559&#34;, &#34;#BF6C8A&#34;]
+    
+    if isinstance(line_color, str):
+        line_color = [line_color]
+
+
+    sp_idx_approved = []
+    p_storage = []
+    for i,isp in enumerate(sp_idx):
+        m = asat.rx2(&#34;values&#34;).rx2(str(isp)).T
+        cs = plt.contour(x_vals, y_vals, m, [0]) # contour for affinity=0
+        plt.close()
+        try:
+            p = cs.collections[0].get_paths()[0]
+            p_storage.append(p)
+            sp_idx_approved.append(isp)
+        except:
+            if messages:
+                print(&#34;&#39;&#34;+sp_names[i]+&#34;&#39; could not be included because affinity=0 for &#34;
+                      &#34;its formation reaction from basis species could not be found &#34;
+                      &#34;within the bounds of the plot.&#34;)
+
+    if unique_styles:
+        if len(sp_idx_approved) &gt; len(line_color)*len(line_styles):
+                raise Exception(&#34;There are more mineral saturation lines than can &#34;
+                        &#34;be supported by line styles and colors. Set line_type &#34;
+                        &#34;and line_color to lists with more styles and colors.&#34;)
+
+    sp_names_approved = list(info([int(name) for name in sp_idx_approved])[&#34;name&#34;])
+    
+    line_style_counter = 0
+    line_color_counter = 0
+    for i,isp in enumerate(sp_idx_approved):
+
+        v = p_storage[i].vertices
+        x = v[:,0]
+        y = v[:,1]
+
+        dout.add_scatter(x=x, y=y, mode=&#39;lines&#39;, name=sp_names_approved[i])
+        dout.update_traces(line_color=line_color[line_color_counter],
+                           selector=dict(name=sp_names_approved[i]), showlegend=showlegend,
+                           line=dict(dash=line_styles[line_style_counter],
+                                     width=line_width))
+        if unique_styles:
+            line_style_counter += 1
+    
+            if line_style_counter+1 &gt; len(line_styles):
+                line_style_counter = 0
+                line_color_counter += 1
+
+    return dout</code></pre>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.affinity"><code class="name flex">
@@ -3497,7 +4090,7 @@ pH, T, P, Eh, &hellip;</dd>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.animation"><code class="name flex">
-<span>def <span class="ident">animation</span></span>(<span>basis_args={}, species_args={}, affinity_args={}, equilibrate_args=None, diagram_args={}, anim_var='T', anim_range=[0, 350, 8], save_as='newanimationframe', save_format='png', height=300, width=400, save_scale=1, messages=False)</span>
+<span>def <span class="ident">animation</span></span>(<span>basis_args={}, species_args={}, affinity_args={}, equilibrate_args=None, diagram_args={}, anim_var='T', anim_range=[0, 350, 8], xlab=None, ylab=None, save_as='newanimationframe', save_format='png', height=300, width=400, save_scale=1, messages=False)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Produce an animated interactive affinity, activity, or predominance diagram.</p>
@@ -3533,6 +4126,8 @@ Example: diagram_args={"alpha":True}</dd>
 <dd>The first two numbers in the list are the starting and ending
 values for <code>anim_var</code>. The third number in the list is the desired
 number of animation frames.</dd>
+<dt><strong><code>xlab</code></strong>, <strong><code>ylab</code></strong> :&ensp;<code>str</code>, optional</dt>
+<dd>Custom names for the X and Y axes.</dd>
 <dt><strong><code>messages</code></strong> :&ensp;<code>bool</code>, default <code>True</code></dt>
 <dd>Display messages from CHNOSZ?</dd>
 </dl>
@@ -3544,7 +4139,7 @@ number of animation frames.</dd>
 </summary>
 <pre><code class="python">def animation(basis_args={}, species_args={}, affinity_args={},
               equilibrate_args=None, diagram_args={},
-              anim_var=&#34;T&#34;, anim_range=[0, 350, 8],
+              anim_var=&#34;T&#34;, anim_range=[0, 350, 8], xlab=None, ylab=None,
               save_as=&#34;newanimationframe&#34;, save_format=&#34;png&#34;, height=300,
               width=400, save_scale=1,
               messages=False):
@@ -3590,6 +4185,9 @@ number of animation frames.</dd>
         The first two numbers in the list are the starting and ending
         values for `anim_var`. The third number in the list is the desired
         number of animation frames.
+
+    xlab, ylab : str, optional
+        Custom names for the X and Y axes.
     
     messages : bool, default True
         Display messages from CHNOSZ?
@@ -3622,9 +4220,11 @@ number of animation frames.</dd>
                         &#34;called &#39;species&#39; (additional keys are optional). &#34;
                         &#34;Example: basis_args={&#39;species&#39;:[&#39;CO2&#39;, &#39;O2&#39;, &#39;H2O&#39;, &#39;H+&#39;]}&#34;)
 
-    basis_sp = basis_args[&#34;species&#34;]
+    
     basis_out = basis(**basis_args)
-
+    basis_sp = list(basis_out.index)
+    basis_state = list(basis_out[&#34;state&#34;])
+    
     if isinstance(species_args, dict):
         if &#34;species&#34; not in species_args.keys():
             raise Exception(&#34;species_args needs to contain a list of species for &#39;species&#39;. &#34;
@@ -3659,7 +4259,6 @@ number of animation frames.</dd>
             for i in range(0, len(mod_species_logact)) :
                 species_out = species(species_args[&#34;species&#34;][i], mod_species_logact[i])
 
-
     sp = list(species_out[&#34;name&#34;])
 
     if isinstance(sp[0], (int, np.integer)):
@@ -3685,14 +4284,19 @@ number of animation frames.</dd>
     if &#34;plot_it&#34; not in diagram_args.keys():
         diagram_args[&#34;plot_it&#34;] = False
     diagram_args[&#34;interactive&#34;] = True
+    if &#34;format_names&#34; not in diagram_args.keys():
+        format_names=True
+        format_x_names=True
+        format_y_names=True
     
     for z in zvals:
-        
 
         if anim_var in basis_out.index:
             basis_out = basis(anim_var, z)
         elif anim_var in list(species_out[&#34;name&#34;]):
-            species_out = species(anim_var, z)
+            species_out = species(anim_var, -z)
+        elif anim_var == &#34;pH&#34;:
+            basis_out = basis(&#34;H+&#34;, -z)
         else:
             affinity_args[anim_var] = z
         
@@ -3746,6 +4350,39 @@ number of animation frames.</dd>
             dmaps_names.append(dmap_names)
         
     xvals = __seq(xrange[0], xrange[1], length_out=xres)
+
+
+    unit_dict = {&#34;P&#34;:&#34;bar&#34;, &#34;T&#34;:&#34;°C&#34;, &#34;pH&#34;:&#34;&#34;, &#34;Eh&#34;:&#34;volts&#34;, &#34;IS&#34;:&#34;mol/kg&#34;}
+    
+    if any([anim_var in basis_out.index, anim_var in list(species_out[&#34;name&#34;])]) and anim_var not in unit_dict.keys():
+        unit_dict[anim_var] = &#34;logact &#34;+anim_var
+
+    for i,s in enumerate(basis_sp):
+        if basis_state[i] in [&#34;aq&#34;, &#34;liq&#34;, &#34;cr&#34;]:
+            if format_names:
+                unit_dict[s] = &#34;log &lt;i&gt;a&lt;/i&gt;&lt;sub&gt;{}&lt;/sub&gt;&#34;.format(chemlabel(s))
+            else:
+                unit_dict[s] = &#34;log &lt;i&gt;a&lt;/i&gt;&lt;sub&gt;{}&lt;/sub&gt;&#34;.format(s)
+        else:
+            if format_names:
+                unit_dict[s] = &#34;log &lt;i&gt;f&lt;/i&gt;&lt;sub&gt;{}&lt;/sub&gt;&#34;.format(chemlabel(s))
+            else:
+                unit_dict[s] = &#34;log &lt;i&gt;f&lt;/i&gt;&lt;sub&gt;{}&lt;/sub&gt;&#34;.format(s)
+
+    xlab = xvar+&#34;, &#34;+unit_dict[xvar]
+    
+    if xvar in basis_sp:
+        xlab = unit_dict[xvar]
+    if xvar == &#34;pH&#34;:
+        xlab = &#34;pH&#34;
+    
+    if is_predom_plot:
+        ylab = yvar+&#34;, &#34;+unit_dict[yvar]
+        if yvar in basis_sp:
+            ylab = unit_dict[yvar]
+        if yvar == &#34;pH&#34;:
+            yvar = &#34;pH&#34;
+
     
     if not is_predom_plot:
 
@@ -3759,10 +4396,24 @@ number of animation frames.</dd>
         
         df_c = pd.concat(dfs)
 
-        fig = px.line(df_c, x=xvar, y=&#34;value&#34;, color=&#39;variable&#39;, template=&#34;simple_white&#34;,
-                      width=500,  height=400, animation_frame=anim_var,
-                      labels=dict(value=yvar, x=xvar),
-                     )
+        if &#34;fill&#34; in diagram_args.keys():
+            if isinstance(diagram_args[&#34;fill&#34;], list):
+                colormap = {key:col for key,col in zip(list(dict.fromkeys(df_c[&#34;variable&#34;])), diagram_args[&#34;fill&#34;])}
+            else:
+                colormap = diagram_args[&#34;fill&#34;]
+
+            # with color mapping
+            fig = px.line(df_c, x=xvar, y=&#34;value&#34;, color=&#39;variable&#39;, template=&#34;simple_white&#34;,
+                          width=500,  height=400, animation_frame=anim_var,
+                          color_discrete_map = colormap,
+                          labels=dict(value=yvar, x=xvar),
+                         )
+        else:
+            # without color mapping
+            fig = px.line(df_c, x=xvar, y=&#34;value&#34;, color=&#39;variable&#39;, template=&#34;simple_white&#34;,
+                          width=500,  height=400, animation_frame=anim_var,
+                          labels=dict(value=yvar, x=xvar),
+                         )
         
         if &#34;annotation&#34; in diagram_args.keys():
             if &#34;annotation_coords&#34; not in diagram_args.keys():
@@ -3778,6 +4429,16 @@ number of animation frames.</dd>
         
         if &#39;main&#39; in diagram_args.keys():
             fig.update_layout(title={&#39;text&#39;:diagram_args[&#34;main&#34;], &#39;x&#39;:0.5, &#39;xanchor&#39;:&#39;center&#39;})
+
+        if isinstance(xlab, str):
+            fig.update_layout(xaxis_title=xlab)
+        if isinstance(ylab, str):
+            fig.update_layout(yaxis_title=ylab)
+        
+        if &#39;fill&#39; in diagram_args.keys():
+            if isinstance(diagram_args[&#34;fill&#34;], list):
+                for i,v in enumerate(diagram_args[&#34;fill&#34;]):
+                    fig[&#39;data&#39;][i][&#39;line&#39;][&#39;color&#39;]=v
         
         fig.update_layout(legend_title=None)
 
@@ -3798,26 +4459,7 @@ number of animation frames.</dd>
     else:
         yvals = __seq(yrange[0], yrange[1], length_out=yres)
 
-    unit_dict = {&#34;P&#34;:&#34;bar&#34;, &#34;T&#34;:&#34;°C&#34;, &#34;pH&#34;:&#34;&#34;, &#34;Eh&#34;:&#34;volts&#34;, &#34;IS&#34;:&#34;mol/kg&#34;}
-    
-    if any([anim_var in basis_out.index, anim_var in list(species_out[&#34;name&#34;])]) and anim_var not in unit_dict.keys():
-        unit_dict[anim_var] = &#34;logact &#34;+anim_var
 
-    for s in basis_sp:
-        unit_dict[s] = &#34;logact &#34;+s
-
-    xlab = xvar+&#34;, &#34;+unit_dict[xvar]
-    if xvar in basis_sp:
-        xlab = unit_dict[xvar]
-    if xvar == &#34;pH&#34;:
-        xlab = &#34;pH&#34;
-    
-    if is_predom_plot:
-        ylab = yvar+&#34;, &#34;+unit_dict[yvar]
-        if yvar in basis_sp:
-            ylab = unit_dict[yvar]
-        if yvar == &#34;pH&#34;:
-            yvar = &#34;pH&#34;
     
     frames = []
     slider_steps = []
@@ -3897,7 +4539,7 @@ number of animation frames.</dd>
                                 hovertemplate=hover_xlab+&#39;&lt;br&gt;&#39;+hover_ylab+&#39;&lt;br&gt;Region: %{customdata}&lt;extra&gt;&lt;/extra&gt;&#39;)
 
         heatmaps.append(heatmaps_i)
-        
+
         frame = go.Frame(data=[heatmaps_i],
                          name=str(i),
                          layout=go.Layout(annotations=annotations_i))
@@ -3970,8 +4612,20 @@ number of animation frames.</dd>
 
     )
 
+
+    if &#39;fill&#39; in diagram_args.keys():
+        if isinstance(diagram_args[&#34;fill&#34;], list):
+            colorscale_temp = []
+            for i,v in enumerate(diagram_args[&#34;fill&#34;]):
+                colorscale_temp.append([i, v])
+            colorscale = colorscale_temp
+        elif isinstance(diagram_args[&#34;fill&#34;], str):
+            colorscale = diagram_args[&#34;fill&#34;]
+    else:
+        colorscale = &#34;viridis&#34;
+    
     fig.update_traces(dict(showscale=False,
-                           colorscale=&#39;viridis&#39;),
+                           colorscale=colorscale),
                       selector={&#39;type&#39;:&#39;heatmap&#39;})
     
     fig.update_layout(
@@ -4096,6 +4750,90 @@ elemental composition.</dd>
         capture.print_captured_r_output()
     
     return bout</code></pre>
+</details>
+</dd>
+<dt id="pyCHNOSZ.fun.convert"><code class="name flex">
+<span>def <span class="ident">convert</span></span>(<span>value, units, T=298.15, P=1, pH=7, logaH2O=0, messages=True)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Python wrapper for the convet() function in CHNOSZ.
+Convert values between units.</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>units</code></strong> :&ensp;<code>str</code></dt>
+<dd>Name of units to set or convert to/from.</dd>
+<dt><strong><code>value</code></strong> :&ensp;<code>float</code></dt>
+<dd>Value(s) to be converted.</dd>
+<dt><strong><code>T</code></strong> :&ensp;<code>float</code>, default <code>298.15</code></dt>
+<dd>Temperature (Kelvin), used in G⁠-⁠logK, pe-Eh⁠ and ⁠logfO2⁠-E0⁠ conversions.</dd>
+<dt><strong><code>P</code></strong> :&ensp;<code>float</code>, default <code>1</code></dt>
+<dd>Pressure (bar), used in logfO2⁠-E0⁠ conversions.</dd>
+<dt><strong><code>pH</code></strong> :&ensp;<code>float</code>, default <code>7</code></dt>
+<dd>pH, used in logfO2⁠-⁠E0⁠ conversions.</dd>
+<dt><strong><code>logaH2O</code></strong> :&ensp;<code>float</code>, default <code>0</code></dt>
+<dd>Logarithm of activity of water, used in ⁠logfO2⁠-E0⁠ conversions</dd>
+<dt><strong><code>messages</code></strong> :&ensp;<code>bool</code>, default <code>True</code></dt>
+<dd>Display messages from CHNOSZ?</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>out</code></strong> :&ensp;<code>float</code></dt>
+<dd>Converted value</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def convert(value, units, T=298.15, P=1, pH=7, logaH2O=0, messages=True):
+    &#34;&#34;&#34;
+    Python wrapper for the convet() function in CHNOSZ.
+    Convert values between units.
+
+    Parameters
+    ----------
+    units : str
+        Name of units to set or convert to/from.
+
+    value : float
+        Value(s) to be converted.
+    
+    T : float, default 298.15
+        Temperature (Kelvin), used in G⁠-⁠logK, pe-Eh⁠ and ⁠logfO2⁠-E0⁠ conversions.
+    
+    P : float, default 1
+        Pressure (bar), used in logfO2⁠-E0⁠ conversions.
+    
+    pH : float, default 7
+        pH, used in logfO2⁠-⁠E0⁠ conversions.
+    
+    logaH2O : float, default 0
+        Logarithm of activity of water, used in ⁠logfO2⁠-E0⁠ conversions
+
+    messages : bool, default True
+        Display messages from CHNOSZ?
+
+    Returns
+    -------
+    out : float
+        Converted value
+    
+    &#34;&#34;&#34;
+
+    if isinstance(value, list):
+        raise Exception(&#34;The convert() function in pyCHNOSZ does not currently &#34;
+                &#34;support lists of values, nor the output from solubility().&#34;)
+    
+    args = {&#34;value&#34;:value, &#34;units&#34;:units, &#34;T&#34;:T, &#34;P&#34;:P, &#34;pH&#34;:pH, &#34;logaH2O&#34;:logaH2O}
+
+    capture = R_output()
+    capture.capture_r_output()
+
+    out = CHNOSZ.convert(**args)
+
+    if messages:
+        capture.print_captured_r_output()
+
+    return out[0]</code></pre>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.diagram"><code class="name flex">
@@ -4265,7 +5003,8 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
             add=False, plot_it=True, tplot=True,
             annotation=None, annotation_coords=[0,0],
             width=600, height=520, dpi=150,
-            messages=True, interactive=False, save_as=None, save_format=None,
+            messages=True, interactive=False,
+            save_as=None, save_format=None,
             save_scale=1, fig_out=False):
     
     &#34;&#34;&#34;
@@ -4481,6 +5220,7 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
                                  title=main,
                                  borders=borders,
                                  names=names,
+                                 format_names=format_names,
                                  annotation=annotation,
                                  annotation_coords=annotation_coords,
                                  balance=balance,
@@ -4544,26 +5284,26 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
             if add: # add=&#39;True&#39; does not work with the current pyCHNOSZ framework
                 raise Exception(&#34;The argument &#39;add&#39; must be assigned the output of the previous diagram(s).&#34;)
             else:
-                a = CHNOSZ.diagram(**args)
+                d = CHNOSZ.diagram(**args)
         elif isinstance(add, list):
             args.update({&#39;add&#39;:True})
             for to_add in add:
                 CHNOSZ.diagram(**to_add)
-            a = CHNOSZ.diagram(**args)
+            d = CHNOSZ.diagram(**args)
 
         else:
             CHNOSZ.diagram(**add)
             args.update({&#39;add&#39;:True})
-            a = CHNOSZ.diagram(**args)
+            d = CHNOSZ.diagram(**args)
             
     if messages:
         capture.print_captured_r_output()
     
-    return a, args</code></pre>
+    return d, args</code></pre>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.diagram_interactive"><code class="name flex">
-<span>def <span class="ident">diagram_interactive</span></span>(<span>data, title=None, borders=0, names=None, annotation=None, annotation_coords=[0, 0], balance=None, xlab=None, ylab=None, colormap='viridis', width=600, height=520, alpha=False, messages=True, plot_it=True, save_as=None, save_format=None, save_scale=1)</span>
+<span>def <span class="ident">diagram_interactive</span></span>(<span>data, title=None, borders=0, names=None, format_names=True, annotation=None, annotation_coords=[0, 0], balance=None, xlab=None, ylab=None, colormap='viridis', width=600, height=520, alpha=False, messages=True, plot_it=True, save_as=None, save_format=None, save_scale=1)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Produce an interactive diagram.</p>
@@ -4579,6 +5319,8 @@ between regions in predominance diagrams. Value indicates thickness
 of the border, in pixels.</dd>
 <dt><strong><code>names</code></strong> :&ensp;<code>str</code>, optional</dt>
 <dd>Names of species for activity lines or predominance fields.</dd>
+<dt><strong><code>format_names</code></strong> :&ensp;<code>bool</code>, default <code>True</code></dt>
+<dd>Apply formatting to chemical formulas?</dd>
 <dt><strong><code>annotation</code></strong> :&ensp;<code>str</code>, optional</dt>
 <dd>Annotation to add to the plot.</dd>
 <dt><strong><code>annotation_coords</code></strong> :&ensp;<code>list</code> of <code>numeric</code>, default <code>[0, 0]</code>, optional</dt>
@@ -4588,6 +5330,8 @@ right.</dd>
 <dd>How to balance the transformations.</dd>
 <dt><strong><code>xlab</code></strong>, <strong><code>ylab</code></strong> :&ensp;<code>str</code></dt>
 <dd>Custom x and y axes labels.</dd>
+<dt><strong><code>colormap</code></strong> :&ensp;<code>str</code></dt>
+<dd>Name of the</dd>
 <dt><strong><code>width</code></strong>, <strong><code>height</code></strong> :&ensp;<code>numeric</code>, default <code>600 by 520</code></dt>
 <dd>Width and height of the plot.</dd>
 <dt><strong><code>alpha</code></strong> :&ensp;<code>bool</code> or <code>str (balance)</code>, default <code>False</code></dt>
@@ -4619,7 +5363,7 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def diagram_interactive(data, title=None, borders=0, names=None,
+<pre><code class="python">def diagram_interactive(data, title=None, borders=0, names=None, format_names=True,
                         annotation=None, annotation_coords=[0, 0],
                         balance=None, xlab=None, ylab=None, colormap=&#34;viridis&#34;,
                         width=600, height=520, alpha=False, messages=True,
@@ -4643,6 +5387,9 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
     
     names : str, optional
         Names of species for activity lines or predominance fields.
+
+    format_names : bool, default True
+        Apply formatting to chemical formulas?
     
     annotation : str, optional
         Annotation to add to the plot.
@@ -4656,6 +5403,9 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
     
     xlab, ylab : str
         Custom x and y axes labels.
+
+    colormap : str
+        Name of the 
     
     width, height : numeric, default 600 by 520
         Width and height of the plot.
@@ -4693,8 +5443,16 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
     An interactive plot.
     &#34;&#34;&#34;
 
+    if format_names:
+        format_x_name = True
+        format_y_name = True
+    else:
+        format_x_name = False
+        format_y_name = False
+    
     with conversion.localconverter(default_converter):
         basis_sp = list(ro.conversion.rpy2py(data.rx2(&#34;basis&#34;)).rownames)
+        basis_state = list(ro.conversion.rpy2py(data.rx2(&#34;basis&#34;)).rx2(&#34;state&#34;))
         xyvars = list(ro.conversion.rpy2py(data.rx2(&#34;vars&#34;)))
         xyvals = list(ro.conversion.rpy2py(data.rx2(&#34;vals&#34;)))
     
@@ -4773,8 +5531,10 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
                 if alpha:
                     ylab = &#34;alpha&#34;
                 else:
-                    ylab = out_units
-                ylab = chemlabel(ylab)
+                    ylab = out_units # A/(2.303RT)
+                    format_y_name = False
+                if format_y_name:
+                    ylab = chemlabel(ylab)
             df = pd.melt(df, id_vars=xyvars, value_vars=sp)
     
         elif len(xyvars)==2:
@@ -4793,8 +5553,17 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
     
         unit_dict = {&#34;P&#34;:&#34;bar&#34;, &#34;T&#34;:&#34;°C&#34;, &#34;pH&#34;:&#34;&#34;, &#34;Eh&#34;:&#34;volts&#34;, &#34;IS&#34;:&#34;mol/kg&#34;}
     
-        for s in basis_sp:
-            unit_dict[s] = &#34;logact &#34;+s
+        for i,s in enumerate(basis_sp):
+            if basis_state[i] in [&#34;aq&#34;, &#34;liq&#34;, &#34;cr&#34;]:
+                if format_names:
+                    unit_dict[s] = &#34;log &lt;i&gt;a&lt;/i&gt;&lt;sub&gt;{}&lt;/sub&gt;&#34;.format(chemlabel(s))
+                else:
+                    unit_dict[s] = &#34;log &lt;i&gt;a&lt;/i&gt;&lt;sub&gt;{}&lt;/sub&gt;&#34;.format(s)
+            else:
+                if format_names:
+                    unit_dict[s] = &#34;log &lt;i&gt;f&lt;/i&gt;&lt;sub&gt;{}&lt;/sub&gt;&#34;.format(chemlabel(s))
+                else:
+                    unit_dict[s] = &#34;log &lt;i&gt;f&lt;/i&gt;&lt;sub&gt;{}&lt;/sub&gt;&#34;.format(s)
         
         if not isinstance(xlab, str):
             xlab = xvar+&#34;, &#34;+unit_dict[xvar]
@@ -4802,16 +5571,22 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
                 xlab = &#34;pH&#34;
             if xvar in basis_sp:
                 xlab = unit_dict[xvar]
-            xlab = chemlabel(xlab)
+            if format_x_name:
+                xlab = chemlabel(xlab)
     
         if len(xyvars) == 1:
-            
-            df[&#34;variable&#34;] = df[&#34;variable&#34;].apply(chemlabel)
+
+            if format_names:
+                df[&#34;variable&#34;] = df[&#34;variable&#34;].apply(chemlabel)
             
             fig = px.line(df, x=xvar, y=&#34;value&#34;, color=&#39;variable&#39;, template=&#34;simple_white&#34;,
                           width=width,  height=height,
                           labels=dict(value=ylab, x=xlab), render_mode=&#39;svg&#39;,
                          )
+
+            if isinstance(colormap, list):
+                for i,v in enumerate(colormap):
+                    fig[&#39;data&#39;][i][&#39;line&#39;][&#39;color&#39;]=v
             
             fig.update_layout(xaxis_title=xlab,
                               yaxis_title=ylab,
@@ -4864,7 +5639,9 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
     
                 if yvar == &#34;pH&#34;:
                     ylab = &#34;pH&#34;
-                ylab = chemlabel(ylab)
+                    
+                if format_y_name:
+                    ylab = chemlabel(ylab)
             
             fig = px.imshow(dmap, width=width, height=height, aspect=&#34;auto&#34;,
                             labels=dict(x=xlab, y=ylab, color=&#34;region&#34;),
@@ -4873,9 +5650,14 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
     
             fig.update(data=[{&#39;customdata&#39;: dmap_names,
                 &#39;hovertemplate&#39;: xlab+&#39;: %{x}&lt;br&gt;&#39;+ylab+&#39;: %{y}&lt;br&gt;Region: %{customdata}&lt;extra&gt;&lt;/extra&gt;&#39;}])
-    
+
             if colormap == &#39;none&#39;:
                 colormap = [[0, &#39;white&#39;], [1, &#39;white&#39;]]
+            elif isinstance(colormap, list):
+                colmap_temp = []
+                for i,v in enumerate(colormap):
+                    colmap_temp.append([i,v])
+                colormap = colmap_temp
             
             fig.update_traces(dict(showscale=False, 
                                    coloraxis=None, 
@@ -4892,8 +5674,14 @@ title/legend/axis/canvas sizes by this factor when saving the figure.</dd>
                     df_s = df.loc[df[&#34;prednames&#34;]==s,]
                     namex = df_s[xvar].mean()
                     namey = df_s[yvar].mean()
+
+                    if format_names:
+                        annot_text = chemlabel(s)
+                    else:
+                        annot_text = str(s)
+                    
                     fig.add_annotation(x=namex, y=namey,
-                                       text=chemlabel(s),
+                                       text=annot_text,
                                        bgcolor=&#34;rgba(255, 255, 255, 0.5)&#34;,
                                        showarrow=False)
     
@@ -5176,6 +5964,210 @@ package compatibility.</dd>
         capture.print_captured_r_output()
     
     return eout</code></pre>
+</details>
+</dd>
+<dt id="pyCHNOSZ.fun.get_formula_ox"><code class="name flex">
+<span>def <span class="ident">get_formula_ox</span></span>(<span>name)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Get quantities of elements and their oxidation states in a chemical compound
+of interest. This function only works when the WORM thermodynamic database
+is loaded. For example, an input of "magnetite" would return the following:
+<code>{'Fe+3': 2.0, 'Fe+2': 1.0, 'O-2': 4.0}</code>.</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>name</code></strong> :&ensp;<code>str</code> or <code>int</code></dt>
+<dd>The name or database index of the chemical species of interest. Example:
+<code>"magnetite"</code> or <code>738</code>.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>out</code></strong> :&ensp;<code>dict</code></dt>
+<dd>A dictionary where each key represents an element in a specific
+oxidation state, and its value is the number of that element in the
+chemical species' formula.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_formula_ox(name):
+    &#34;&#34;&#34;
+    Get quantities of elements and their oxidation states in a chemical compound
+    of interest. This function only works when the WORM thermodynamic database
+    is loaded. For example, an input of &#34;magnetite&#34; would return the following:
+    `{&#39;Fe+3&#39;: 2.0, &#39;Fe+2&#39;: 1.0, &#39;O-2&#39;: 4.0}`.
+
+    Parameters
+    ----------
+    name : str or int
+        The name or database index of the chemical species of interest. Example:
+        `&#34;magnetite&#34;` or `738`.
+
+    Returns
+    -------
+    out : dict
+        A dictionary where each key represents an element in a specific
+        oxidation state, and its value is the number of that element in the
+        chemical species&#39; formula.
+    
+    &#34;&#34;&#34;
+    
+    if not isinstance(name, str) and not isinstance(name, int):
+        raise Exception(&#34;Must provide input as a string (chemical species name) or an integer (chemical species index).&#34;)
+
+    # convert ispecies to name
+    if isinstance(name, int):
+        name = info(name, messages=False).name.iloc[0]
+    
+    if &#34;formula_ox&#34; in dir(thermo()):
+        df = thermo().formula_ox
+
+        if name not in list(df[&#34;name&#34;]):
+            raise Exception(&#34;The species &#34; + str(name) + &#34; was not found in the loaded thermodynamic database.&#34;)
+
+        try:
+            df[df[&#34;name&#34;]==name][&#34;formula_ox&#34;].iloc[0].split()
+        except:
+            raise Exception(&#34;The species &#34; + str(name) + &#34; does not have &#34;
+                    &#34;elemental oxidation states given in the &#39;formula_ox&#39; &#34;
+                    &#34;column of the loaded thermodynamic database.&#34;)
+        
+        split_list = df[df[&#34;name&#34;]==name][&#34;formula_ox&#34;].iloc[0].split()
+        split_list_clean = [s.replace(&#34; &#34;, &#34;&#34;) for s in split_list]
+
+        try:
+            elem_ox_names = [re.findall(r&#34;^(?:\d+|)([A-Z].*$)&#34;, s)[0] for s in split_list_clean]
+        except:
+            elem_ox_names = []
+
+        elem_ox_list = []
+        for s in split_list:
+            coeff = re.findall(r&#34;(\d+)[A-Z]&#34;, s)
+            if len(coeff) == 0:
+                coeff = 1
+            else:
+                coeff = float(coeff[0])
+            elem_ox_list.append(coeff)
+
+        return {key:val for key,val in zip(elem_ox_names, elem_ox_list)}</code></pre>
+</details>
+</dd>
+<dt id="pyCHNOSZ.fun.get_n_element_ox"><code class="name flex">
+<span>def <span class="ident">get_n_element_ox</span></span>(<span>names, element_ox, binary=False)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Get the number of an element of a chosen oxidation state in the formula of a
+list of chemical species. This function only works when the WORM
+thermodynamic database is loaded. Example:</p>
+<p>If binary is False, returns a list containing the number of the chosen
+element and oxidation state in the chemical species. For example, how many
+ferrous irons are in the formulae of hematite, fayalite, and magnetite,
+respectively?</p>
+<pre><code>get_n_element_ox(names=[&quot;hematite&quot;, &quot;fayalite&quot;, &quot;magnetite&quot;],
+                 element_ox=&quot;Fe+2&quot;,
+                 binary=False)
+</code></pre>
+<p>will return the following list representing the number of ferrous irons
+in the formulas of hematite, fayalite, and magnetite, respectively:</p>
+<pre><code>[0, 2.0, 1.0]
+</code></pre>
+<p>If binary is True, returns a list of whether or not ferrous iron is in their
+formulas:</p>
+<pre><code>[False, True, True]
+</code></pre>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>names</code></strong> :&ensp;<code>str</code> or <code>int,</code> or <code>a list</code> of <code>str</code> or <code>int</code></dt>
+<dd>The name or database index of a chemical species, or a list of
+names or indices. Example: <code>["hematite", "fayalite", "magnetite"]</code> or
+<code>[788, 782, 798]</code>.</dd>
+<dt><strong><code>element_ox</code></strong> :&ensp;<code>str</code></dt>
+<dd>An element with a specific oxidation state. For example: <code>"Fe+2"</code> for
+ferrous iron.</dd>
+<dt><strong><code>binary</code></strong> :&ensp;<code>bool</code>, default <code>False</code></dt>
+<dd>Should the output list show True/False for presence or absence of the
+element defined by <code>element_ox</code>? By default, this parameter is set to
+False so the output list shows quantities of the element instead.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>out_list</code></strong> :&ensp;<code>list</code> of <code>float</code></dt>
+<dd>A list containing quantities of the chosen element oxidation state in
+the formulas of the chemical species (if <code>binary=False</code>) or whether the
+chosen element oxidation state is present in the formulae (if <code>binary=
+True</code>).</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_n_element_ox(names, element_ox, binary=False):
+    &#34;&#34;&#34;
+    Get the number of an element of a chosen oxidation state in the formula of a
+    list of chemical species. This function only works when the WORM
+    thermodynamic database is loaded. Example:
+    
+    If binary is False, returns a list containing the number of the chosen
+    element and oxidation state in the chemical species. For example, how many
+    ferrous irons are in the formulae of hematite, fayalite, and magnetite,
+    respectively?
+    ```
+    get_n_element_ox(names=[&#34;hematite&#34;, &#34;fayalite&#34;, &#34;magnetite&#34;],
+                     element_ox=&#34;Fe+2&#34;,
+                     binary=False)
+    ```
+    will return the following list representing the number of ferrous irons
+    in the formulas of hematite, fayalite, and magnetite, respectively:
+    ```
+    [0, 2.0, 1.0]
+    ```
+    If binary is True, returns a list of whether or not ferrous iron is in their
+    formulas:
+    ```
+    [False, True, True]
+    ```
+
+    Parameters
+    ----------
+    names : str or int, or a list of str or int
+        The name or database index of a chemical species, or a list of
+        names or indices. Example: `[&#34;hematite&#34;, &#34;fayalite&#34;, &#34;magnetite&#34;]` or
+        `[788, 782, 798]`.
+
+    element_ox : str
+        An element with a specific oxidation state. For example: `&#34;Fe+2&#34;` for
+        ferrous iron.
+
+    binary : bool, default False
+        Should the output list show True/False for presence or absence of the
+        element defined by `element_ox`? By default, this parameter is set to
+        False so the output list shows quantities of the element instead.
+
+    Returns
+    -------
+    out_list : list of float
+        A list containing quantities of the chosen element oxidation state in
+        the formulas of the chemical species (if `binary=False`) or whether the
+        chosen element oxidation state is present in the formulae (if `binary=
+        True`).
+    
+    &#34;&#34;&#34;
+
+    if not isinstance(names, list):
+        names = list(names)
+    
+    n_list = []
+    for name in names:
+        d = get_formula_ox(name)
+        n_list.append(d.get(element_ox, 0))
+
+    if binary:
+        out_list = [True if n!=0 else False for n in n_list]
+    else:
+        out_list = n_list
+    
+    return out_list</code></pre>
 </details>
 </dd>
 <dt id="pyCHNOSZ.fun.info"><code class="name flex">
@@ -5649,6 +6641,7 @@ OBIGT, will be loaded.</dd>
     
     if db == &#34;WORM&#34;:
         url = &#34;https://raw.githubusercontent.com/worm-portal/WORM-db/master/wrm_data.csv&#34;
+        url_ref = &#34;https://raw.githubusercontent.com/worm-portal/WORM-db/master/references.csv&#34;
 
         # Load WORM database by detault
         if can_connect_to(url):
@@ -5657,10 +6650,19 @@ OBIGT, will be loaded.</dd>
                 content = webpage.read().decode()
             WORM_DB = pd.read_csv(StringIO(content), sep=&#34;,&#34;)
 
+
+
             thermo_trunc = thermo()[&#34;OBIGT&#34;][thermo()[&#34;OBIGT&#34;][&#34;name&#34;].isin([&#34;water&#34;, &#34;H+&#34;, &#34;e-&#34;])]
             thermo(**{&#34;OBIGT&#34;:thermo_trunc})
 
+            if can_connect_to(url_ref):
+                with urlopen(url_ref) as webpage:
+                    content = webpage.read().decode()
+                WORM_refs = pd.read_csv(StringIO(content), sep=&#34;,&#34;)
+                thermo(**{&#34;refs&#34;:WORM_refs})
+            
             _ = add_OBIGT(WORM_DB, messages=False)
+            
             if messages:
                 naq = WORM_DB[WORM_DB[&#34;state&#34;] == &#34;aq&#34;].shape[0]
                 ntot = WORM_DB.shape[0]
@@ -6909,6 +7911,20 @@ returns a dictionary of calculated values.</dd>
         return ro.conversion.rpy2py(out)</code></pre>
 </details>
 </dd>
+<dt id="pyCHNOSZ.fun.water_lines"><code class="name flex">
+<span>def <span class="ident">water_lines</span></span>(<span>d, line_color=None, line_type=None, line_width=1)</span>
+</code></dt>
+<dd>
+<div class="desc"></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def water_lines(d, line_color=None, line_type=None, line_width=1):
+    messages = False
+    add_saturation_lines(a, d)</code></pre>
+</details>
+</dd>
 <dt id="pyCHNOSZ.fun.zc"><code class="name flex">
 <span>def <span class="ident">zc</span></span>(<span>formula, messages=True)</span>
 </code></dt>
@@ -7215,16 +8231,20 @@ define the species of interest.</dd>
 </ul>
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
-<ul class="two-column">
+<ul class="">
 <li><code><a title="pyCHNOSZ.fun.add_OBIGT" href="#pyCHNOSZ.fun.add_OBIGT">add_OBIGT</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.add_protein" href="#pyCHNOSZ.fun.add_protein">add_protein</a></code></li>
+<li><code><a title="pyCHNOSZ.fun.add_saturation_lines" href="#pyCHNOSZ.fun.add_saturation_lines">add_saturation_lines</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.affinity" href="#pyCHNOSZ.fun.affinity">affinity</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.animation" href="#pyCHNOSZ.fun.animation">animation</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.basis" href="#pyCHNOSZ.fun.basis">basis</a></code></li>
+<li><code><a title="pyCHNOSZ.fun.convert" href="#pyCHNOSZ.fun.convert">convert</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.diagram" href="#pyCHNOSZ.fun.diagram">diagram</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.diagram_interactive" href="#pyCHNOSZ.fun.diagram_interactive">diagram_interactive</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.entropy" href="#pyCHNOSZ.fun.entropy">entropy</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.equilibrate" href="#pyCHNOSZ.fun.equilibrate">equilibrate</a></code></li>
+<li><code><a title="pyCHNOSZ.fun.get_formula_ox" href="#pyCHNOSZ.fun.get_formula_ox">get_formula_ox</a></code></li>
+<li><code><a title="pyCHNOSZ.fun.get_n_element_ox" href="#pyCHNOSZ.fun.get_n_element_ox">get_n_element_ox</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.info" href="#pyCHNOSZ.fun.info">info</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.makeup" href="#pyCHNOSZ.fun.makeup">makeup</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.mass" href="#pyCHNOSZ.fun.mass">mass</a></code></li>
@@ -7240,6 +8260,7 @@ define the species of interest.</dd>
 <li><code><a title="pyCHNOSZ.fun.unicurve" href="#pyCHNOSZ.fun.unicurve">unicurve</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.univariant_TP" href="#pyCHNOSZ.fun.univariant_TP">univariant_TP</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.water" href="#pyCHNOSZ.fun.water">water</a></code></li>
+<li><code><a title="pyCHNOSZ.fun.water_lines" href="#pyCHNOSZ.fun.water_lines">water_lines</a></code></li>
 <li><code><a title="pyCHNOSZ.fun.zc" href="#pyCHNOSZ.fun.zc">zc</a></code></li>
 </ul>
 </li>

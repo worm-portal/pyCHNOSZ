@@ -19,7 +19,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
-    install_requires=['rpy2', 'pandas', 'ipython', 'plotly', 'simplegeneric', 'chemparse', 'WORMutils'],
+    install_requires=['rpy2', 'pandas', 'ipython', 'plotly', 'simplegeneric', 'chemparse', 'WORMutils', 'matplotlib', 'numpy', 'wormutils_r'],
     package_data={'': ['*.r']},
     include_package_data=True,
     zip_safe=False
