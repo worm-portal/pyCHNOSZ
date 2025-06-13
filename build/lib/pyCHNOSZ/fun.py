@@ -276,7 +276,7 @@ def add_saturation_lines(asat, d, line_color=None, line_type=None, line_width=1,
     sp_idx_approved = []
     p_storage = []
     for i,isp in enumerate(sp_idx):
-        m = _r_df_to_pd(asat.rx2("values").rx2(str(isp))).T
+        m = asat.rx2("values").rx2(str(isp)).T
         cs = plt.contour(x_vals, y_vals, m, [0]) # contour for affinity=0
         plt.close()
         try:
@@ -1148,8 +1148,7 @@ def diagram_interactive(data, title=None, borders=0, names=None, format_names=Tr
     if calc_type=="a":
         # handling output of affinity()
         if isinstance(balance, str):
-            #df["n.balance"] = list(species().rx2(balance))
-            df["n.balance"] = list(species()[balance])
+            df["n.balance"] = list(species().rx2(balance))
         else:
             df["n.balance"] = balance
         # divide values by balance
