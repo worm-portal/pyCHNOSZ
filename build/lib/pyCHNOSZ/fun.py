@@ -22,14 +22,12 @@ import warnings
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", UserWarning)
     import rpy2.robjects as ro
-
-import rpy2.rinterface_lib
-from rpy2.robjects.packages import importr
-from rpy2.robjects.lib import grdevices
-from rpy2.robjects import pandas2ri
+    import rpy2.rinterface_lib
+    from rpy2.robjects.packages import importr
+    from rpy2.robjects.lib import grdevices
 
 from WORMutils import chemlabel, can_connect_to
-from wormutils_r import R_output
+from wormutils_r import R_output, pd_to_r_df, r_df_to_pd, rpy2float
 
 import matplotlib.pyplot as plt
 
@@ -276,7 +274,7 @@ def add_saturation_lines(asat, d, line_color=None, line_type=None, line_width=1,
     sp_idx_approved = []
     p_storage = []
     for i,isp in enumerate(sp_idx):
-        m = asat.rx2("values").rx2(str(isp)).T
+        m = r_df_to_pd(asat.rx2("values").rx2(str(isp))).T
         cs = plt.contour(x_vals, y_vals, m, [0]) # contour for affinity=0
         plt.close()
         try:
@@ -1148,7 +1146,8 @@ def diagram_interactive(data, title=None, borders=0, names=None, format_names=Tr
     if calc_type=="a":
         # handling output of affinity()
         if isinstance(balance, str):
-            df["n.balance"] = list(species().rx2(balance))
+            #df["n.balance"] = list(species().rx2(balance))
+            df["n.balance"] = list(species()[balance])
         else:
             df["n.balance"] = balance
         # divide values by balance
@@ -1536,8 +1535,10 @@ def water(property=None, T=298.15, P="Psat", P1=True, messages=True):
         property = _convert_to_RVector(property, force_Rvec=True)
     else:
         pass
-    
+
     args = {'property':property, 'T':T, 'P':P, 'P1':P1}
+    
+    args = rpy2float(args)
     
     capture = R_output()
     capture.capture_r_output()
@@ -1549,7 +1550,7 @@ def water(property=None, T=298.15, P="Psat", P1=True, messages=True):
     
     if property not in ["SUPCRT92", "SUPCRT", "IAPWS95", "IAPWS", "DEW"]:
 
-        return _r_df_to_pd(out)
+        return r_df_to_pd(out)
         
         
 def entropy(formula, messages=True):
@@ -1775,7 +1776,7 @@ def seq2aa(protein, sequence, messages=True):
     if messages:
         capture.print_captured_r_output()
     
-    return _r_df_to_pd(pout)
+    return r_df_to_pd(pout)
 
 
 def add_protein(aa, messages=True):
@@ -1797,7 +1798,7 @@ def add_protein(aa, messages=True):
     list of int
         List of protein indices, iprotein.
     """
-    aa = _pd_to_r_df(aa)
+    aa = pd_to_r_df(aa)
     args = {'aa':aa}
 
     capture = R_output()
@@ -2332,7 +2333,7 @@ def species(species=None, state=None, delete=False, add=False,
     capture.capture_r_output()
 
     sout = CHNOSZ.species(**args)
-    sout = _r_df_to_pd(sout)
+    sout = r_df_to_pd(sout)
         
     if messages:
         capture.print_captured_r_output()
@@ -2391,7 +2392,7 @@ def basis(species=None, state=None, logact=None, delete=False,
     capture.capture_r_output()
 
     bout = CHNOSZ.basis(**args)
-    bout = _r_df_to_pd(bout)
+    bout = r_df_to_pd(bout)
         
     if messages:
         capture.print_captured_r_output()
@@ -2436,7 +2437,7 @@ def reset(db="OBIGT", messages=True):
 
             obigt_r = thermo()["OBIGT"]
             
-            obigt_pd = _r_df_to_pd(obigt_r)
+            obigt_pd = r_df_to_pd(obigt_r)
             obigt_pd = _assign_OBIGT_pandas_dtypes(obigt_pd)
             
             thermo_trunc = obigt_pd[obigt_pd["name"].isin(["water", "H+", "e-"])]
@@ -2627,7 +2628,7 @@ def mod_OBIGT(*args, messages=True, **kwargs):
         
         
         arg_list = list(args)
-        arg_list[0] = _pd_to_r_df(arg_list[0])
+        arg_list[0] = pd_to_r_df(arg_list[0])
         args = tuple(arg_list)
     else:
         pass
@@ -2639,19 +2640,7 @@ def mod_OBIGT(*args, messages=True, **kwargs):
     
     return list(ispecies)
     
-    
-def _pd_to_r_df(pandas_df):
-    with (ro.default_converter + pandas2ri.converter).context():
-        r_df = ro.conversion.get_conversion().py2rpy(pandas_df)
-    return r_df
 
-
-def _r_df_to_pd(r_df):
-    with (ro.default_converter + pandas2ri.converter).context():
-        pandas_df = ro.conversion.get_conversion().rpy2py(r_df)
-    return pandas_df
-    
-    
 def info(species, state=None, check_it=True, messages=True):
     
     """
@@ -2704,7 +2693,7 @@ def info(species, state=None, check_it=True, messages=True):
         capture.print_captured_r_output()
     
     if output_is_df:
-        return _r_df_to_pd(a)
+        return r_df_to_pd(a)
     else:
         return list(a)
 
@@ -2831,14 +2820,14 @@ def subcrt(species, coeff=None, state=None,
         poly = None
     
     if not single_species:
-        out_dict = {"reaction":_r_df_to_pd(a[0]),
-                    "out":_r_df_to_pd(a[1])} # the extra [0] is important
+        out_dict = {"reaction":r_df_to_pd(a[0]),
+                    "out":r_df_to_pd(a[1])} # the extra [0] is important
     else:
-        out_dict = {"species":_r_df_to_pd(a[0]), "out":{}}
+        out_dict = {"species":r_df_to_pd(a[0]), "out":{}}
         
         i=0
         for df in a[1]:
-            out_dict["out"][out_dict["species"].name[i]] = _r_df_to_pd(df)
+            out_dict["out"][out_dict["species"].name[i]] = r_df_to_pd(df)
             i += 1
         
     if isinstance(warn, str):
@@ -2967,7 +2956,7 @@ class thermo:
             if isinstance(value, list) or isinstance(value, str) or isinstance(value, NumberTypes):
                 value = _convert_to_RVector(value, force_Rvec=False)
             elif isinstance(value, pd.DataFrame):
-                value = _pd_to_r_df(value)
+                value = pd_to_r_df(value)
             else:
                 pass
             args.update({key:value})
@@ -2982,7 +2971,7 @@ class thermo:
         
         for i, name in enumerate(t.names):
             if isinstance(t[i], ro.DataFrame) or isinstance(t[i], ro.Matrix):
-                attr = _r_df_to_pd(t[i])
+                attr = r_df_to_pd(t[i])
             elif isinstance(t[i], ro.ListVector):
                 attr = {}
                 for ii, subname in enumerate(t[i].names):
@@ -3144,8 +3133,8 @@ def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
     else:
         warn = None
     
-    out_dict = {"reaction":_r_df_to_pd(a[0]),
-                "out":_r_df_to_pd(a[1])} # the extra [0] is important
+    out_dict = {"reaction":r_df_to_pd(a[0]),
+                "out":r_df_to_pd(a[1])} # the extra [0] is important
         
     if warn != None:
         out_dict["warnings"] = warn
