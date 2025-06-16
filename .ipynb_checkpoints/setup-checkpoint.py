@@ -18,7 +18,7 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=3.6',
+    python_requires='>=3.10',
     install_requires=['rpy2', 'pandas', 'ipython', 'plotly', 'simplegeneric', 'chemparse', 'WORMutils', 'matplotlib', 'numpy', 'wormutils_r'],
     package_data={'': ['*.r']},
     include_package_data=True,
