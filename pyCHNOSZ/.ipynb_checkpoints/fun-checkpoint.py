@@ -9,7 +9,6 @@ import plotly.graph_objects as go
 import plotly.io as pio
 import copy
 import statistics
-import pkg_resources
 import decimal
 import chemparse
 import copy
@@ -26,7 +25,7 @@ with warnings.catch_warnings():
     from rpy2.robjects.packages import importr
     from rpy2.robjects.lib import grdevices
 
-from WORMutils import chemlabel, can_connect_to
+from WORMutils import chemlabel, can_connect_to, import_package_file
 from wormutils_r import R_output, pd_to_r_df, r_df_to_pd, rpy2float
 
 import matplotlib.pyplot as plt
@@ -3083,8 +3082,8 @@ def unicurve(logK, species, coeff, state, pressures=1, temperatures=25, IS=0,
     capture = R_output()
     capture.capture_r_output()
 
-    r_univariant = pkg_resources.resource_string(
-        __name__, 'univariant.r').decode("utf-8")
+    r_univariant = import_package_file(__name__, "univariant.r")
+
     ro.r(r_univariant)
     
     if solve=="T":

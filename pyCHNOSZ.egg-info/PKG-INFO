@@ -1,4 +1,4 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.4
 Name: pyCHNOSZ
 Version: 0.8.16
 Summary: Python wrapper for the R package CHNOSZ.
@@ -7,7 +7,7 @@ Author-email: gmboyer@asu.edu
 Classifier: Programming Language :: Python :: 3
 Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: OS Independent
-Requires-Python: >=3.6
+Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 License-File: LICENSE.txt
 Requires-Dist: rpy2
@@ -20,6 +20,15 @@ Requires-Dist: WORMutils
 Requires-Dist: matplotlib
 Requires-Dist: numpy
 Requires-Dist: wormutils_r
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: license-file
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
 
 # pyCHNOSZ
 
