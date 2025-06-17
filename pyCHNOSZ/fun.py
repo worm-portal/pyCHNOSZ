@@ -277,7 +277,7 @@ def add_saturation_lines(asat, d, line_color=None, line_type=None, line_width=1,
         cs = plt.contour(x_vals, y_vals, m, [0]) # contour for affinity=0
         plt.close()
         try:
-            p = cs.collections[0].get_paths()[0]
+            p = cs.get_paths()[0]
             p_storage.append(p)
             sp_idx_approved.append(isp)
         except:
@@ -286,12 +286,19 @@ def add_saturation_lines(asat, d, line_color=None, line_type=None, line_width=1,
                       "its formation reaction from basis species could not be found "
                       "within the bounds of the plot.")
 
+    if len(sp_idx_approved) == 0:
+        if messages:
+            print("Saturation lines for species of interest could not be plotted because "
+                  "affinity=0 for their formation reactions from basis species could not be "
+                  "found within the bounds of the plot.")
+        return d
+    
     if unique_styles:
         if len(sp_idx_approved) > len(line_color)*len(line_styles):
                 raise Exception("There are more mineral saturation lines than can "
                         "be supported by line styles and colors. Set line_type "
                         "and line_color to lists with more styles and colors.")
-
+    
     sp_names_approved = list(info([int(name) for name in sp_idx_approved])["name"])
     
     line_style_counter = 0
@@ -1165,7 +1172,7 @@ def diagram_interactive(data, title=None, borders=0, names=None, format_names=Tr
     df = df.transpose()
 
     if alpha and len(xyvars) == 1:
-        df = df.applymap(lambda x: 10**x)
+        df = df.apply(lambda x: 10**x)
         df = df[sp].div(df[sp].sum(axis=1), axis=0)
 
     xvar = xyvars[0]
@@ -1268,7 +1275,8 @@ def diagram_interactive(data, title=None, borders=0, names=None, format_names=Tr
 
     if len(xyvars) == 2:
         mappings = {'pred': {s:lab for s,lab in zip(sp,range(0,len(sp)))}}
-        df.replace(mappings, inplace=True)
+        with pd.option_context('future.no_silent_downcasting', True):
+            df.replace(mappings, inplace=True)
 
         data = np.array(df.pred)
         shape = (len(xvals), len(yvals))
