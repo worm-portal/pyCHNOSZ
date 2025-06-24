@@ -1,0 +1,11 @@
+rpy2
+pandas
+ipython
+plotly
+simplegeneric
+chemparse
+WORMutils
+matplotlib
+numpy
+wormutils_r
+statistics

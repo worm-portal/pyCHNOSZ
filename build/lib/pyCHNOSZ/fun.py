@@ -2809,6 +2809,7 @@ def subcrt(species, coeff=None, state=None,
         args["IS"] = _convert_to_RVector(IS, force_Rvec=False)
 
     args = rpy2float(args)
+    #[print(type(v)) for v in list(args.values())]
     
     capture = R_output()
     capture.capture_r_output()
