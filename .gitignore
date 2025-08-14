@@ -1,0 +1,25 @@
+# Ignore everything:
+*
+
+# Include only these folders:
+!pyCHNOSZ/
+!pyCHNOSZ/*
+!pyCHNOSZ/*/
+!html/
+!html/pyCHNOSZ/
+!html/pyCHNOSZ/*
+!html/pyCHNOSZ/*/
+!README.md
+!CITATION.cff
+!LICENSE.txt
+!setup.py
+!.gitignore
+
+# Ignore pycache
+pyCHNOSZ/__pycache__/*
+pyCHNOSZ/__pycache__/
+pyCHNOSZ/__pycache__
+.ipynb_checkpoints
+.ipynb_checkpoints/
+.ipynb_checkpoints/*
+__pycache__/
